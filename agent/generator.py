@@ -24,7 +24,6 @@ class CtaProposal:
     target_rationale: str
     headline: str
     body: str
-    alternative_targets: list[str]
 
 
 def _catalog_block(catalog: list[SgpEntry]) -> str:
@@ -44,7 +43,6 @@ def _build_schema(catalog: list[SgpEntry]) -> dict[str, Any]:
             "target_rationale",
             "headline",
             "body",
-            "alternative_targets",
         ],
         "properties": {
             "target_url": {
@@ -65,11 +63,6 @@ def _build_schema(catalog: list[SgpEntry]) -> dict[str, Any]:
                 "type": "string",
                 "minLength": 10,
                 "maxLength": config.BODY_MAX_CHARS,
-            },
-            "alternative_targets": {
-                "type": "array",
-                "items": {"type": "string", "enum": [entry.url for entry in catalog]},
-                "maxItems": 3,
             },
         },
     }

@@ -25,11 +25,8 @@ from agent import config
 from agent.artifacts import AuditLog, write_artifacts
 from agent.generator import CtaProposal, propose_cta
 from agent.guardrails import (
-    GuardrailFailure,
     StructureCheck,
     check_proposal_structure,
-    circuit_breaker_tripped,
-    enforce_run_caps,
     should_skip_blog,
 )
 from agent.llm import CostCapExceeded, CostMeter
@@ -47,15 +44,12 @@ from agent.state import (
 logger = logging.getLogger("agent.run")
 
 
-def _load_mocks() -> tuple[dict[str, Any], dict[str, Any], set[str], set[str]]:
+def _load_mocks() -> tuple[dict[str, Any], dict[str, Any]]:
     baseline = json.loads(config.SITE_BASELINE_FILE.read_text(encoding="utf-8"))
     perf = json.loads(config.CTA_PERFORMANCE_FILE.read_text(encoding="utf-8"))
-    frozen = json.loads(config.FROZEN_LIST_FILE.read_text(encoding="utf-8"))
     return (
         baseline,
         perf.get("measurements", {}),
-        set(frozen.get("blogs", [])),
-        set(frozen.get("sgps", [])),
     )
 
 
@@ -68,7 +62,6 @@ def _run_generator_then_review(
     blog: BlogPage,
     catalog: list[SgpEntry],
     catalog_by_url: dict[str, SgpEntry],
-    frozen_sgps: set[str],
     current_cta: dict[str, Any] | None,
     meter: CostMeter,
     audit: AuditLog,
@@ -102,7 +95,6 @@ def _run_generator_then_review(
         structure = check_proposal_structure(
             proposal=asdict(proposal),
             catalog_urls=set(catalog_by_url.keys()),
-            frozen_sgps=frozen_sgps,
             current_cta=current_cta,
         )
         last_structure = structure
@@ -149,7 +141,7 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
     audit.log("run_start", week=week_label, dry_run=dry_run, generator=config.GENERATOR_MODEL, reviewer=config.REVIEWER_MODEL)
 
     state = load_state()
-    baseline, perf_measurements, frozen_blogs, frozen_sgps = _load_mocks()
+    baseline, perf_measurements = _load_mocks()
 
     blogs = fetch_all_blogs()
     catalog = build_catalog()
@@ -169,14 +161,12 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
     human_review: list[dict[str, Any]] = []
     retired: list[dict[str, Any]] = []
     kept: list[dict[str, Any]] = []
-    cost_cap_deferred: list[dict[str, Any]] = []
     proposals_made = 0
-    rejected_count = 0
-    cost_cap_break_at: int | None = None
+    llm_budget_exhausted = False
 
     meter = CostMeter()
 
-    for idx, item in enumerate(queue):
+    for item in queue:
         if item.action == "keep":
             kept.append({"blog_url": item.blog.url, "reason": item.reason})
             audit.log("kept", blog_url=item.blog.url, reason=item.reason)
@@ -192,11 +182,6 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
             continue
 
         if item.action == "retire":
-            # Frozen means "never touch", including don't remove the CTA.
-            if item.blog.url in frozen_blogs:
-                kept.append({"blog_url": item.blog.url, "reason": "frozen_blog (retire suppressed)"})
-                audit.log("retire_suppressed_frozen", blog_url=item.blog.url)
-                continue
             retired.append({"blog_url": item.blog.url, "reason": item.reason})
             audit.log("retire_decided", blog_url=item.blog.url, reason=item.reason)
             if not dry_run:
@@ -205,15 +190,13 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
 
         # add | rewrite
         skip = should_skip_blog(
-            blog_url=item.blog.url,
             current_cta=item.current_cta,
-            frozen_blogs=frozen_blogs,
             today=today,
         )
         if skip:
-            # Pre-generator skips (frozen, min_age) don't need a human - the
-            # CTA just stays as-is until next week. Push to `kept` so the
-            # human-review queue only shows items that actually need a person.
+            # Pre-generator skips don't need a human - the CTA just stays as-is
+            # until next week. Push to `kept` so the human-review queue only
+            # shows items that actually need a person.
             kept.append({"blog_url": item.blog.url, "reason": skip.detail})
             audit.log("pre_generator_skip", blog_url=item.blog.url, failure=asdict(skip))
             continue
@@ -223,13 +206,26 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
             kept.append({"blog_url": item.blog.url, "reason": f"dry-run: would {item.action}"})
             continue
 
+        if llm_budget_exhausted:
+            human_review.append({
+                "blog_url": item.blog.url,
+                "reason": "not_processed_cost_cap",
+                "guardrail_failures": [
+                    {
+                        "code": "cost_cap",
+                        "detail": "LLM budget was exhausted earlier in the run",
+                    }
+                ],
+            })
+            audit.log("llm_skip_cost_cap", blog_url=item.blog.url, action=item.action)
+            continue
+
         try:
             proposals_made += 1
             proposal, verdict, structure, failure_reason = _run_generator_then_review(
                 blog=item.blog,
                 catalog=catalog,
                 catalog_by_url=catalog_by_url,
-                frozen_sgps=frozen_sgps,
                 current_cta=item.current_cta,
                 meter=meter,
                 audit=audit,
@@ -241,8 +237,8 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
                 "reason": "cost_cap",
                 "guardrail_failures": [{"code": "cost_cap", "detail": str(exc)}],
             })
-            cost_cap_break_at = idx
-            break  # remaining queue items get explicit cost_cap deferral below
+            llm_budget_exhausted = True
+            continue
 
         if failure_reason is None:
             approved.append({
@@ -258,8 +254,6 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
             continue
 
         # Failed - to human queue.
-        if failure_reason in {"reviewer_rejected", "revise_unresolved"}:
-            rejected_count += 1
         human_review.append({
             "blog_url": item.blog.url,
             "reason": failure_reason,
@@ -267,28 +261,6 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
             "verdict": asdict(verdict) if verdict else None,
             "guardrail_failures": [asdict(f) for f in (structure.failures if structure else [])] or None,
         })
-
-    # Explicitly defer everything the cost-cap break skipped so the artifact
-    # doesn't silently drop them.
-    if cost_cap_break_at is not None:
-        for skipped in queue[cost_cap_break_at + 1:]:
-            cost_cap_deferred.append({
-                "blog_url": skipped.blog.url,
-                "deferred_reason": "cost_cap",
-            })
-        audit.log("cost_cap_deferred_remaining", n=len(cost_cap_deferred))
-
-    # Run-level guardrails
-    drift = circuit_breaker_tripped(rejected=rejected_count, total_proposed=proposals_made)
-    if drift:
-        audit.log("circuit_breaker_tripped", rejected=rejected_count, total=proposals_made)
-        human_review.extend([{**a, "reason": "circuit_breaker_redirected"} for a in approved])
-        approved = []
-
-    kept_after_caps, deferred = enforce_run_caps(approved)
-    deferred = cost_cap_deferred + deferred
-    approved = kept_after_caps
-    audit.log("post_caps", n_approved=len(approved), n_deferred=len(deferred))
 
     if not dry_run:
         for item in approved:
@@ -312,13 +284,10 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
         "run_completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "generator_model": config.GENERATOR_MODEL,
         "reviewer_model": config.REVIEWER_MODEL,
-        "drift_flag": drift,
         "n_blogs": len(blogs),
         "total_proposed": proposals_made,
-        "rejected": rejected_count,
         "n_approved": len(approved),
         "n_human_review": len(human_review),
-        "n_deferred": len(deferred),
         "n_kept": len(kept),
         "n_retired": len(retired),
         "prompt_tokens": meter.total_prompt_tokens,
@@ -329,29 +298,6 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
         "kept": kept,
         "retired": retired,
         "human_review": human_review,
-        "deferred": deferred,
-    }
-    diff = {
-        "week": week_label,
-        "approved": [
-            {
-                "blog_url": a["blog_url"],
-                "action": a["action"],
-                "new_cta": {
-                    "target_url": a["proposal"]["target_url"],
-                    "headline": a["proposal"]["headline"],
-                    "body": a["proposal"]["body"],
-                },
-                "previous_cta": a.get("previous_cta"),
-            }
-            for a in approved
-        ],
-        "retired": retired,
-        "deferred": deferred,
-        "human_review": [
-            {"blog_url": h["blog_url"], "reason": h["reason"]}
-            for h in human_review
-        ],
     }
 
     audit.log("run_end", spent_usd=meter.total_cost_usd, n_approved=len(approved))
@@ -365,8 +311,6 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
     out = write_artifacts(
         week_label=week_label,
         plan_context=plan_context,
-        diff=diff,
-        audit_log=audit.entries,
     )
     logger.info("wrote artifacts -> %s", out)
     return out

@@ -22,7 +22,6 @@ SEED_BLOGS_FILE = MOCKS_DIR / "seed_blogs.json"
 SEED_CATALOG_FILE = MOCKS_DIR / "seed_catalog.json"
 CTA_PERFORMANCE_FILE = MOCKS_DIR / "cta_performance.json"
 SITE_BASELINE_FILE = MOCKS_DIR / "site_baseline.json"
-FROZEN_LIST_FILE = MOCKS_DIR / "frozen_list.json"
 
 # Model selection. Generator can be cheaper; reviewer should be at least as strong.
 # Effort knobs are passed straight through as OpenAI's `reasoning_effort` param
@@ -36,19 +35,14 @@ REVIEWER_MODEL = "gpt-5.4"
 REVIEWER_EFFORT = "medium"
 
 # Run-level guardrails.
-MAX_WEEKLY_CHANGES = 10
-MAX_PER_SGP = 2
 MIN_CTA_AGE_DAYS = 7
 MAX_REWRITES_WITHOUT_LIFT = 3
 MAX_RUN_COST_USD = 1.00
-REVIEWER_REJECT_CIRCUIT_BREAKER = 0.5  # halt if >= 50% rejected
-# But only with a meaningful sample; 1/2 is noise, not drift.
-MIN_PROPOSALS_FOR_CIRCUIT_BREAKER = 4
 
 # Copy + quality limits.
 HEADLINE_MAX_CHARS = 70
 BODY_MAX_CHARS = 200
-SIMILARITY_REJECT_THRESHOLD = 0.85  # Levenshtein ratio vs current CTA
+SIMILARITY_REJECT_THRESHOLD = 0.85  # difflib ratio vs current CTA
 REVIEWER_APPROVAL_FLOOR = 0.7  # both relevance + copy quality must clear this
 
 # Prioritization tuning.
@@ -78,7 +72,7 @@ BANNED_PHRASES = [
 TOKEN_PRICES_PER_MTOK = {
     "gpt-5.4": {"input": 2.50, "output": 15.00},
     "gpt-5.4-mini": {"input": 0.75, "output": 4.50},
-    # Kept for back-compat with checked-in sample_output run.logs.
+    # Kept for compatibility with older local runs.
     "gpt-5": {"input": 1.25, "output": 10.00},
     "gpt-5-mini": {"input": 0.25, "output": 2.00},
 }

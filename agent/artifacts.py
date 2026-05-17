@@ -1,118 +1,126 @@
 """Emit human-reviewable artifacts at the end of each run.
 
-- `plan.md`: the PR-style markdown a PM approves
-- `diff.json`: machine-readable changeset (what a real CMS push would consume)
-- `run.log`: structured audit trail (one JSON line per step), rewritten each run
+`plan.md` is the PR-style markdown a PM approves.
 """
 
 from __future__ import annotations
 
-import json
-import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, BaseLoader
-
 from agent import config
 
-logger = logging.getLogger(__name__)
+
+def _money(value: float, places: int) -> str:
+    return f"{value:.{places}f}"
 
 
-_PLAN_TEMPLATE = """# Weekly CTA Plan, {{ week }}
+def _append_approved(lines: list[str], approved: list[dict[str, Any]]) -> None:
+    if not approved:
+        lines.append("_None this week._")
+        return
 
-Run completed: {{ run_completed_at }}
-Generator model: `{{ generator_model }}` • Reviewer model: `{{ reviewer_model }}`
+    for index, item in enumerate(approved, start=1):
+        proposal = item["proposal"]
+        verdict = item["verdict"]
+        lines.extend(
+            [
+                f"### {index}. `{item['blog_url']}` -> {item['action']}",
+                "",
+                f"- **Target**: [{proposal['target_url']}]({proposal['target_url']})",
+                f"- **Rationale**: {proposal['target_rationale']}",
+                f"- **Headline**: {proposal['headline']}",
+                f"- **Body**: {proposal['body']}",
+                (
+                    f"- **Reviewer**: verdict `{verdict['verdict']}`, "
+                    f"relevance `{verdict['relevance_score']:.2f}`, "
+                    f"copy `{verdict['copy_quality_score']:.2f}`"
+                ),
+                f"- **Reviewer reasoning**: {verdict['reasoning']}",
+            ]
+        )
+        previous = item.get("previous_cta")
+        if previous:
+            lines.extend(
+                [
+                    "- **Replaces**:",
+                    f"  - headline: {previous['headline']}",
+                    f"  - body: {previous['body']}",
+                    f"  - target: {previous['target_url']}",
+                ]
+            )
+        lines.append("")
 
-{% if drift_flag -%}
-> **Drift suspected.** Reviewer rejected {{ rejected }}/{{ total_proposed }} proposals (>= 50%). Run halted, everything is in the human-review queue below. Check the prompts, the catalog, or the model before next week.
-{%- endif %}
 
-## Run stats
+def _append_simple_list(lines: list[str], items: list[dict[str, Any]], *, retired: bool = False) -> None:
+    if not items:
+        lines.append("_None._")
+        return
+    for item in items:
+        suffix = "; CTA reverted to generic `/scholarships`. Flagged for human follow-up." if retired else ""
+        lines.append(f"- `{item['blog_url']}` - {item['reason']}{suffix}")
 
-- Blogs reviewed: {{ n_blogs }}
-- LLM proposals generated: {{ total_proposed }}
-- Approved (queued for deploy): {{ n_approved }}
-- Sent to human review: {{ n_human_review }}
-- Deferred to next week: {{ n_deferred }}
-- LLM tokens: {{ prompt_tokens }} in / {{ completion_tokens }} out
-- LLM spend: ${{ '%.4f'|format(cost_usd) }} of ${{ '%.2f'|format(cost_cap) }} cap
 
-## Approved changes ({{ n_approved }})
+def _append_human_review(lines: list[str], items: list[dict[str, Any]]) -> None:
+    if not items:
+        lines.append("_None._")
+        return
 
-{% if approved -%}
-{% for item in approved %}
-### {{ loop.index }}. `{{ item.blog_url }}` -> {{ item.action }}
-
-- **Target**: [{{ item.proposal.target_url }}]({{ item.proposal.target_url }})
-- **Rationale**: {{ item.proposal.target_rationale }}
-- **Headline**: {{ item.proposal.headline }}
-- **Body**: {{ item.proposal.body }}
-- **Reviewer**: verdict `{{ item.verdict.verdict }}`, relevance `{{ '%.2f'|format(item.verdict.relevance_score) }}`, copy `{{ '%.2f'|format(item.verdict.copy_quality_score) }}`
-- **Reviewer reasoning**: {{ item.verdict.reasoning }}
-{% if item.previous_cta %}
-- **Replaces**:
-  - headline: {{ item.previous_cta.headline }}
-  - body: {{ item.previous_cta.body }}
-  - target: {{ item.previous_cta.target_url }}
-{% endif %}
-{% endfor %}
-{% else -%}
-_None this week._
-{% endif %}
-
-## Kept as-is ({{ n_kept }})
-
-{% for item in kept %}
-- `{{ item.blog_url }}` — {{ item.reason }}
-{% else %}
-_None._
-{% endfor %}
-
-## Retired ({{ n_retired }})
-
-{% for item in retired %}
-- `{{ item.blog_url }}` — {{ item.reason }}; CTA reverted to generic `/scholarships`. Flagged for human follow-up.
-{% else %}
-_None._
-{% endfor %}
-
-## Needs human review ({{ n_human_review }})
-
-{% for item in human_review %}
-### `{{ item.blog_url }}` — {{ item.reason }}
-
-{% if item.proposal -%}
-- Proposed target: {{ item.proposal.target_url }}
-- Headline: {{ item.proposal.headline }}
-- Body: {{ item.proposal.body }}
-{% endif -%}
-{% if item.verdict -%}
-- Reviewer verdict: `{{ item.verdict.verdict }}` ({{ item.verdict.reasoning }})
-- Issues: {{ item.verdict.issues | join('; ') }}
-{% endif -%}
-{% if item.guardrail_failures -%}
-- Guardrail failures: {% for f in item.guardrail_failures %}`{{ f.code }}` ({{ f.detail }}){% if not loop.last %}; {% endif %}{% endfor %}
-{% endif %}
-{% else %}
-_None._
-{% endfor %}
-
-## Deferred to next week ({{ n_deferred }})
-
-{% for item in deferred %}
-- `{{ item.blog_url }}` — {{ item.deferred_reason }}
-{% else %}
-_None._
-{% endfor %}
-"""
+    for item in items:
+        lines.extend([f"### `{item['blog_url']}` - {item['reason']}", ""])
+        proposal = item.get("proposal")
+        if proposal:
+            lines.extend(
+                [
+                    f"- Proposed target: {proposal['target_url']}",
+                    f"- Headline: {proposal['headline']}",
+                    f"- Body: {proposal['body']}",
+                ]
+            )
+        verdict = item.get("verdict")
+        if verdict:
+            issues = "; ".join(verdict.get("issues", []))
+            lines.extend(
+                [
+                    f"- Reviewer verdict: `{verdict['verdict']}` ({verdict['reasoning']})",
+                    f"- Issues: {issues}",
+                ]
+            )
+        failures = item.get("guardrail_failures")
+        if failures:
+            rendered = "; ".join(f"`{f['code']}` ({f['detail']})" for f in failures)
+            lines.append(f"- Guardrail failures: {rendered}")
+        lines.append("")
 
 
 def render_plan_md(context: dict[str, Any]) -> str:
-    env = Environment(loader=BaseLoader(), trim_blocks=False, lstrip_blocks=False)
-    template = env.from_string(_PLAN_TEMPLATE)
-    return template.render(**context)
+    lines = [
+        f"# Weekly CTA Plan, {context['week']}",
+        "",
+        f"Run completed: {context['run_completed_at']}",
+        f"Generator model: `{context['generator_model']}` - Reviewer model: `{context['reviewer_model']}`",
+        "",
+        "## Run stats",
+        "",
+        f"- Blogs reviewed: {context['n_blogs']}",
+        f"- LLM proposals generated: {context['total_proposed']}",
+        f"- Approved (queued for deploy): {context['n_approved']}",
+        f"- Sent to human review: {context['n_human_review']}",
+        f"- LLM tokens: {context['prompt_tokens']} in / {context['completion_tokens']} out",
+        f"- LLM spend: ${_money(context['cost_usd'], 4)} of ${_money(context['cost_cap'], 2)} cap",
+        "",
+        f"## Approved changes ({context['n_approved']})",
+        "",
+    ]
+    _append_approved(lines, context["approved"])
+    lines.extend(["", f"## Kept as-is ({context['n_kept']})", ""])
+    _append_simple_list(lines, context["kept"])
+    lines.extend(["", f"## Retired ({context['n_retired']})", ""])
+    _append_simple_list(lines, context["retired"], retired=True)
+    lines.extend(["", f"## Needs human review ({context['n_human_review']})", ""])
+    _append_human_review(lines, context["human_review"])
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def week_dir(week_label: str) -> Path:
@@ -125,24 +133,14 @@ def write_artifacts(
     *,
     week_label: str,
     plan_context: dict[str, Any],
-    diff: dict[str, Any],
-    audit_log: list[dict[str, Any]],
 ) -> Path:
     out = week_dir(week_label)
     (out / "plan.md").write_text(render_plan_md(plan_context), encoding="utf-8")
-    (out / "diff.json").write_text(json.dumps(diff, indent=2, sort_keys=True), encoding="utf-8")
-    with (out / "run.log").open("w", encoding="utf-8") as fh:
-        for entry in audit_log:
-            fh.write(json.dumps(entry, sort_keys=True) + "\n")
     return out
 
 
 class AuditLog:
-    """Tiny helper that timestamps every decision and keeps it in memory.
-
-    Flushed once at the end of the run so a crashed run still leaves partial
-    artifacts behind for debugging.
-    """
+    """Tiny helper that timestamps decisions for dry-run output."""
 
     def __init__(self) -> None:
         self.entries: list[dict[str, Any]] = []

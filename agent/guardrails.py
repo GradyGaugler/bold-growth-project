@@ -4,19 +4,17 @@ Organized by where in the pipeline they fire:
 
 - `should_skip_blog` : pre-generator (filter the queue)
 - `check_proposal_structure` : post-generator, pre-reviewer (cheap structural checks)
-- `enforce_run_caps` : post-reviewer, batch-level (diversity + weekly cap)
-- `circuit_breaker_tripped` : run-level (halt if reviewer is rejecting too much)
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from difflib import SequenceMatcher
+import logging
 from typing import Any
 from urllib.parse import urlparse
 
-import Levenshtein
 import requests
 
 from agent import config
@@ -43,14 +41,10 @@ class StructureCheck:
 
 def should_skip_blog(
     *,
-    blog_url: str,
     current_cta: dict[str, Any] | None,
-    frozen_blogs: set[str],
     today: datetime,
 ) -> GuardrailFailure | None:
     """Pre-generator: filter blogs we won't touch this run. None => proceed."""
-    if blog_url in frozen_blogs:
-        return GuardrailFailure("frozen_blog", "blog is on the frozen list")
     if current_cta and current_cta.get("deployed_at"):
         deployed = _parse_iso(current_cta["deployed_at"])
         age_days = (today - deployed).days
@@ -129,7 +123,6 @@ def check_proposal_structure(
     *,
     proposal: dict[str, Any],
     catalog_urls: set[str],
-    frozen_sgps: set[str],
     current_cta: dict[str, Any] | None,
     verify_url_live: bool = True,
 ) -> StructureCheck:
@@ -144,11 +137,6 @@ def check_proposal_structure(
     if target not in catalog_urls:
         failures.append(
             GuardrailFailure("off_catalog", f"target_url {target!r} not in catalog")
-        )
-
-    if target in frozen_sgps:
-        failures.append(
-            GuardrailFailure("frozen_sgp", f"target_url {target!r} is on the frozen list")
         )
 
     # On-domain.
@@ -176,7 +164,8 @@ def check_proposal_structure(
     if current_cta and current_cta.get("headline") is not None:
         cur_blob = (current_cta.get("headline", "") + " | " + current_cta.get("body", "")).strip()
         new_blob = (headline + " | " + body).strip()
-        if cur_blob and Levenshtein.ratio(cur_blob, new_blob) >= config.SIMILARITY_REJECT_THRESHOLD:
+        similarity = SequenceMatcher(None, cur_blob, new_blob).ratio()
+        if cur_blob and similarity >= config.SIMILARITY_REJECT_THRESHOLD:
             failures.append(
                 GuardrailFailure(
                     "no_op_change",
@@ -189,40 +178,3 @@ def check_proposal_structure(
         failures.append(GuardrailFailure("dead_link", f"HEAD {target} did not return 2xx/3xx"))
 
     return StructureCheck(failures=failures)
-
-
-def enforce_run_caps(
-    approved: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Apply same-SGP diversity cap and weekly change cap.
-
-    Returns (kept, deferred). Deferred items get bumped to next week.
-    """
-    kept: list[dict[str, Any]] = []
-    deferred: list[dict[str, Any]] = []
-    per_sgp_count: dict[str, int] = {}
-
-    for item in approved:
-        target = item["proposal"]["target_url"]
-        if per_sgp_count.get(target, 0) >= config.MAX_PER_SGP:
-            item = {**item, "deferred_reason": "diversity_cap"}
-            deferred.append(item)
-            continue
-        if len(kept) >= config.MAX_WEEKLY_CHANGES:
-            item = {**item, "deferred_reason": "weekly_change_cap"}
-            deferred.append(item)
-            continue
-        per_sgp_count[target] = per_sgp_count.get(target, 0) + 1
-        kept.append(item)
-    return kept, deferred
-
-
-def circuit_breaker_tripped(*, rejected: int, total_proposed: int) -> bool:
-    """Halt the run if reviewer rejected at least 50% of proposals.
-
-    Only trips with `MIN_PROPOSALS_FOR_CIRCUIT_BREAKER` or more proposals -
-    otherwise 1 out of 2 (or 1 out of 1) trivially trips the breaker.
-    """
-    if total_proposed < config.MIN_PROPOSALS_FOR_CIRCUIT_BREAKER:
-        return False
-    return rejected / total_proposed >= config.REVIEWER_REJECT_CIRCUIT_BREAKER

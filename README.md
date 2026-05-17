@@ -28,7 +28,7 @@ flowchart TD
     reviewer -->|approve| approved["Approved changes"]
     reviewer -->|revise| generator
     reviewer -->|reject| humanQueue
-    approved --> writeArtifacts["Write plan.md, diff.json, run.log"]
+    approved --> writeArtifacts["Write plan.md"]
     humanQueue --> writeArtifacts
     writeArtifacts --> persistState["Persist new state"]
 ```
@@ -49,15 +49,15 @@ bold-growth-project/
     guardrails.py   # all hard rules
     state.py        # atomic JSON state + history
     prioritize.py   # queue selection + decision rules (pure functions)
-    artifacts.py    # plan.md (Jinja2) + diff.json + run.log
+    artifacts.py    # plan.md renderer
     prompts/
       generator.md  # PM-facing (edit-safety rules in an HTML comment at the top)
       reviewer.md
-  mocks/            # seed blogs, seed catalog, baseline + perf JSON, frozen list
+  mocks/            # seed blogs, seed catalog, baseline + perf JSON
   state/            # cta_state.json + cached HTML
-  artifacts/        # week-YYYY-MM-DD/{plan.md, diff.json, run.log}
+  artifacts/        # week-YYYY-MM-DD/plan.md
   sample_output/    # checked-in real outputs from two runs
-  tests/            # guardrails, prioritize, state (30 tests)
+  tests/            # guardrails, prioritize, state (22 tests)
   design/           # Part 2 + Part 3 deliverables
   pyproject.toml
   README.md
@@ -65,14 +65,13 @@ bold-growth-project/
 
 ## What runs when you `python -m agent.run`
 
-1. Load `state/cta_state.json` (deployed CTAs + history) and the four mock files (baseline, perf, frozen list, plus the two seed lists).
+1. Load `state/cta_state.json` (deployed CTAs + history) and the mock files (baseline, perf, plus the two seed lists).
 2. Scrape each seed blog and each seed SGP from bold.org (disk-cached - reruns are deterministic).
 3. Build the queue: for each blog, decide `add` / `rewrite` / `keep` / `retire` based on (a) whether a CTA exists, (b) whether the blog's `content_hash` changed since deploy, (c) measured CTR vs floor / strong thresholds, (d) consecutive rewrites without lift.
 4. Per actionable blog: call the **generator** (`gpt-5.4-mini`, `reasoning_effort=high`) with the blog excerpt + the full catalog as a JSON-schema enum, so the model literally cannot hallucinate a target URL.
-5. Run cheap structural guardrails (link resolves, on-domain, length caps, banned phrases, similarity vs current CTA, frozen-list check).
+5. Run cheap structural guardrails (link resolves, on-domain, length caps, banned phrases, similarity vs current CTA).
 6. If structure passes, call the **reviewer** (`gpt-5.4`, `reasoning_effort=medium`) with a fresh context - no "we just wrote this" framing - and route on its verdict (`approve` / `revise` / `reject`). One revise retry, max.
-7. Enforce run-level caps (same-SGP diversity, weekly change limit, reviewer-rejection circuit breaker). Over-cap proposals defer to next week.
-8. Persist the new state (atomic write) and emit `plan.md` (the PR a PM approves), `diff.json` (what a real CMS push would consume), and `run.log` (every decision, one JSON line each, for debugging and future eval work).
+7. Persist the new state (atomic write) and emit `plan.md`, the PR-style artifact a PM approves.
 
 ## How to run it
 
@@ -85,7 +84,7 @@ python -m agent.run --dry-run                 # smoke the pipeline, no LLM, no w
 python -m agent.run --week 1-2026-05-16       # one weekly run (real LLM calls)
 python -m agent.run --simulate-perf           # write deterministic mocked perf
 python -m agent.run --week 2-2026-05-23       # second run; loop behaves differently
-pytest -q                                     # 30 tests
+pytest -q                                     # 22 tests
 ```
 
 See [`sample_output/`](sample_output/) for two real runs already executed against bold.org with the real OpenAI API (~$0.26 of LLM spend across both). Week 2 shows 3 `keep`, 1 `rewrite`, 1 to human review - proof the loop actually behaves differently the second time.
@@ -96,17 +95,17 @@ See [`sample_output/`](sample_output/) for two real runs already executed agains
 
 ## Guardrails
 
-Four layers, intentionally redundant:
+Five layers, intentionally redundant:
 
-- **Pre-queue**: frozen list (blogs we never touch), `MIN_CTA_AGE_DAYS=7` (don't churn our own work before perf stabilizes)
+- **Pre-generator**: `MIN_CTA_AGE_DAYS=7` (don't churn our own work before perf stabilizes)
 - **Prompt-level**: banned phrases inlined in the generator prompt; `target_url` schema-enum constrained to the real catalog (hallucinated paths are unrepresentable)
-- **Post-generator**: HEAD-request URL check + on-domain check; length caps (70 / 200 chars); banned-phrase post-check; Levenshtein similarity vs current CTA (block no-op rewrites)
-- **Post-reviewer**: same-SGP diversity cap (`MAX_PER_SGP=2`), weekly change cap (`MAX_WEEKLY_CHANGES=10`), reviewer-rejection circuit breaker (≥50% rejects on a sample of ≥4 → halt run, flag "drift suspected")
+- **Post-generator**: HEAD-request URL check + on-domain check; length caps (70 / 200 chars); banned-phrase post-check; `difflib` similarity vs current CTA (block no-op rewrites)
+- **Post-reviewer**: separate reviewer approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact
 - **Run-level**: hard `$1.00` cost cap (raises `CostCapExceeded`); deterministic via the disk cache
 
 ## Riskiest part
 
-The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog. Mitigations layered: catalog-bounded outputs (schema enum), separate reviewer in a fresh context, min-age + similarity + diversity + weekly caps, the human-approvable `plan.md` artifact (nothing auto-ships today), retire-after-3-fails, the circuit breaker, the cost cap, and the full `run.log` audit trail.
+The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog. Mitigations layered: catalog-bounded outputs (schema enum), separate reviewer in a fresh context, min-age + similarity checks, the human-approvable `plan.md` artifact (nothing auto-ships today), retire-after-3-fails, and the cost cap.
 
 ## Trust ladder
 
@@ -117,16 +116,16 @@ The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog. Mit
 ## With another day / week
 
 - Real GA4 + ClickHouse pull instead of mocked `cta_performance.json`
-- Real CMS write API (today the diff is the "PR")
+- Real CMS write API (today the markdown plan is the "PR")
 - Multi-armed bandit per blog (today: single best variant)
 - Expand from 5 seed blogs to all ~100 in `TOP_PUBLIC_LANDING_PAGES`
-- An eval set built from captured `run.log` data for reviewer accuracy regression tests
+- An eval set built from saved reviewer decisions for reviewer accuracy regression tests
 - Annotate live A/B tests so we can sanity-check our CTR floor / strong thresholds against reality
 
 ## Out of scope
 
 - Real A/B runner (performance is mocked)
-- Real CMS push (today the diff is the "PR")
+- Real CMS push (today the markdown plan is the "PR")
 - Production scheduler / hosting (it runs locally as a CLI)
 - Live analytics ingestion (GA4 / ClickHouse pulls are mocked)
 - Vector DB (the small catalog fits in-prompt)

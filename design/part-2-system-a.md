@@ -58,7 +58,7 @@ Per candidate persona each week, pick one of:
 - **Before the agent runs.** Skip personas on a legal block-list (where an *eligibility* requirement could discriminate against a protected class).
 - **Inside the prompt.** Reuse Part 1's banned phrases. Constrain the slug to a pre-approved URL prefix (`/by-life-situation/`*, `/by-major/*`, `/by-background/*`) so the agent can't invent a new namespace.
 - **After the agent writes the page.** Reject on cannibalization (title or headline too similar to an existing SGP), slug collision, or length caps.
-- **At the run level.** Max 2 new SGPs per week. Halt if the reviewer rejects more than half of recent proposals (same circuit breaker as Part 1). $2 hard cap on LLM spend per run.
+- **At the run level.** Max 2 new SGPs per week. $2 hard cap on LLM spend per run.
 
 ## How you'd know it's working
 

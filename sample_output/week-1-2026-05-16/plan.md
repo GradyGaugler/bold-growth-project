@@ -1,7 +1,7 @@
 # Weekly CTA Plan, 1-2026-05-16
 
 Run completed: 2026-05-16T22:43:17+00:00
-Generator model: `gpt-5-mini` • Reviewer model: `gpt-5`
+Generator model: `gpt-5-mini` - Reviewer model: `gpt-5`
 
 
 
@@ -11,7 +11,6 @@ Generator model: `gpt-5-mini` • Reviewer model: `gpt-5`
 - LLM proposals generated: 5
 - Approved (queued for deploy): 5
 - Sent to human review: 0
-- Deferred to next week: 0
 - LLM tokens: 34724 in / 26266 out
 - LLM spend: $0.1930 of $1.00 cap
 
@@ -75,7 +74,6 @@ Generator model: `gpt-5-mini` • Reviewer model: `gpt-5`
 
 _None._
 
-
 ## Retired (0)
 
 
@@ -83,12 +81,5 @@ _None._
 
 
 ## Needs human review (0)
-
-
-_None._
-
-
-## Deferred to next week (0)
-
 
 _None._

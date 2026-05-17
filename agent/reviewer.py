@@ -58,8 +58,8 @@ class ReviewerVerdict:
 def _catalog_block(catalog: list[SgpEntry]) -> str:
     """Compact catalog listing - URL + title only.
 
-    The reviewer needs this to validate alternative_targets and reason about
-    whether a better page exists. Keep it terse - we're paying per token.
+    The reviewer needs this to reason about whether a better page exists. Keep
+    it terse - we're paying per token.
     """
     return "\n".join(f"- {entry.url}: {entry.title}" for entry in catalog)
 

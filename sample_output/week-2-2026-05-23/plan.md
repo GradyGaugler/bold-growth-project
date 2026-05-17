@@ -1,7 +1,7 @@
 # Weekly CTA Plan, 2-2026-05-23
 
 Run completed: 2026-05-16T22:47:50+00:00
-Generator model: `gpt-5-mini` • Reviewer model: `gpt-5`
+Generator model: `gpt-5-mini` - Reviewer model: `gpt-5`
 
 
 
@@ -11,7 +11,6 @@ Generator model: `gpt-5-mini` • Reviewer model: `gpt-5`
 - LLM proposals generated: 2
 - Approved (queued for deploy): 1
 - Sent to human review: 1
-- Deferred to next week: 0
 - LLM tokens: 11965 in / 8882 out
 - LLM spend: $0.0722 of $1.00 cap
 
@@ -38,11 +37,11 @@ Generator model: `gpt-5-mini` • Reviewer model: `gpt-5`
 ## Kept as-is (3)
 
 
-- `https://bold.org/blog/best-physical-therapy-schools/` — CTR 1.04% between floor and strong - hold
+- `https://bold.org/blog/best-physical-therapy-schools/` - CTR 1.04% between floor and strong - hold
 
-- `https://bold.org/blog/top-dental-schools-in-the-us/` — CTR 1.45% between floor and strong - hold
+- `https://bold.org/blog/top-dental-schools-in-the-us/` - CTR 1.45% between floor and strong - hold
 
-- `https://bold.org/blog/what-gpa-do-you-need-to-get-a-full-scholarship/` — CTR 1.68% between floor and strong - hold
+- `https://bold.org/blog/what-gpa-do-you-need-to-get-a-full-scholarship/` - CTR 1.68% between floor and strong - hold
 
 
 ## Retired (0)
@@ -54,17 +53,10 @@ _None._
 ## Needs human review (1)
 
 
-### `https://bold.org/blog/best-architecture-colleges/` — revise_unresolved
+### `https://bold.org/blog/best-architecture-colleges/` - revise_unresolved
 
 - Proposed target: https://bold.org/scholarships/by-year/high-school/seniors/
 - Headline: Scholarships for college-bound high school seniors
 - Body: Planning to study architecture? Browse scholarships curated for high school seniors — many accept incoming freshmen and can help cover first-year college costs.
-- Reviewer verdict: `revise` (Right target page for this audience given the catalog, but the copy under-leverages the architecture context and the alternatives fall outside the catalog. Tighten the headline to architecture, add concrete on-page actions, and fix/omit alternatives.)
-- Issues: Headline is generic; add 'architecture' to match reader intent and improve CTR.; Body can highlight filters (major, deadlines, award size) to make the value clearer.; Alternative_targets are not in the provided catalog; replace with catalog-valid options or omit.
-
-
-
-## Deferred to next week (0)
-
-
-_None._
+- Reviewer verdict: `revise` (Right target page for this audience given the catalog, but the copy under-leverages the architecture context. Tighten the headline to architecture and add concrete on-page actions.)
+- Issues: Headline is generic; add 'architecture' to match reader intent and improve CTR.; Body can highlight filters (major, deadlines, award size) to make the value clearer.
