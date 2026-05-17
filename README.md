@@ -1,4 +1,4 @@
-# Blog → SGP Routing Agent
+# Blog → SGP Routing Agent (Part 1)
 
 Take-home for the Product Manager, Agentic Growth role at Bold.org. Recurring-loop agent that, each week, picks the most relevant scholarship page (SGP) for every Bold blog post and writes a contextual CTA - gated by a separate reviewer agent and a human-approvable markdown artifact.
 
@@ -6,7 +6,9 @@ Repo: `https://github.com/<owner>/bold-growth-project` *(swap in real URL on pus
 
 ## Problem and why this one
 
-`human/inputs/data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See [`human/research/thoughts.md`](human/research/thoughts.md) for the other nine candidate opportunities.
+`human/inputs/data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See `[human/research/thoughts.md](human/research/thoughts.md)` for the other nine candidate opportunities.
+
+NOTE: while this has the highest opportunity, it is relatively high effort and low certainty. I chose this, in part, to demonstrate something more interesting and advanced.
 
 ## Why a recurring loop
 
@@ -86,53 +88,69 @@ The date in the `--week` label drives the run clock (e.g. `1-2026-05-16` runs as
 Each run writes:
 
 - `human/artifacts/week-<label>/plan.md` - the PR-style artifact a PM approves.
-  - Approved CTAs (target SGP + new headline/body) and what they replace.
-  - Items kept (current CTA is still good enough) and retired (3 failed rewrites in a row).
-  - Anything routed to human review, and why.
-  - Run cost: token counts, $ spent, vs. the $1 cap.
-- `state/cta_state.json` - updated deployed-CTA state + per-blog history (carries into next week's run).
+  - Approved CTAs (target SGP + new headline/body) and what they replace
+  - Items kept (current CTA is still good enough) and retired (3 failed rewrites in a row)
+  - Anything routed to human review, and why
+  - Run cost
+- `state/cta_state.json` - updated deployed-CTA state + per-blog history (carries into next week's run)
 
 ### Prompts
 
 The agent is driven by two prompts a PM owns and edits, plus one config file:
 
-- [`agent/prompts/generator.md`](agent/prompts/generator.md) - tells the generator how to pick a target SGP and write the CTA copy.
-- [`agent/prompts/reviewer.md`](agent/prompts/reviewer.md) - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject.
-- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in [`agent/config.py`](agent/config.py) - intentionally code, since it's policy.
+- `[agent/prompts/generator.md](agent/prompts/generator.md)` - tells the generator how to pick a target SGP and write the CTA copy
+- `[agent/prompts/reviewer.md](agent/prompts/reviewer.md)` - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject
+- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in `[agent/config.py](agent/config.py)`
 
 ## Guardrails
 
-Four layers, each catching a different failure mode:
+### Script / output guardrails
+
+Four layers, each catching a different failure mode before anything reaches the PM artifact:
 
 - **Prompt-level**: banned phrases inlined in the generator prompt; `target_url` schema-enum constrained to the real catalog (hallucinated paths are unrepresentable)
-- **Post-generator**: HEAD-request URL check + on-domain check; length caps (70 / 200 chars); `difflib` similarity vs current CTA (block no-op rewrites)
-- **Post-reviewer**: separate reviewer agent in a fresh context, with an approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact. Brand safety (banned phrases, hype, false promises) is enforced here, not in code
-- **Run-level**: hard `$1.00` cost cap (raises `CostCapExceeded`); deterministic via the disk cache
+- **Post-generator**: after the generator writes a CTA, the script checks that the link works, stays on Bold.org, fits the copy limits, and is meaningfully different from the current CTA
+- **Post-reviewer**: separate reviewer agent in a fresh context, with an approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact. Brand safety (banned phrases, hype, false promises) is enforced here.
+- **Run-level**: hard `$1.00` cost cap per run
+
+### Analytics / business guardrails
+
+The agent should also prove it is not making the funnel worse. Before expanding rollout, compare edited blogs against the pre-change baseline and a matched / held-out set of similar blogs:
+
+- **Blog CTR regression check**: make sure CTA click-through rate is not getting worse for edited blogs. This is handled in two ways: the weekly agent loop reads performance and can keep / rewrite / retire underperforming CTAs, and a PostHog chart alerts on per-page CTR drops outside the expected band
+- **Downstream quality checks**: also monitor SGP submit rate, verified application rate, and D7 activation so the system does not optimize for clicks that turn into lower-quality applicants. This is also a PostHog chart with alerts.
+- **Regression rule**: if CTA clicks rise while submit / verify / activation falls, or if any destination page shows a meaningful drop vs baseline, auto-retire the CTA or route it back to human review. Basically, measure e2e (not just the immediate action) for this funnel to check against regression.
 
 ## Trust ladder
 
-1. **Today**: human approves all of `plan.md` before "deploy".
-2. **Next**: human still approves `add` + `retire`; `rewrite` of an already-converting CTA (CTR ≥ strong) auto-ships.
-3. **Later**: fully autonomous on `rewrite`; humans get a weekly digest, not an approval gate.
+1. **Today**: human approves all of `plan.md` before "deploy" and only 5 blogs.
+2. **Next**: when humans approve 80%, allow it to auto ship itself with humans reading weekly digest. Low confidence score require human review.
+3. **Later**: when 80% do not require changes, expand from 5 blogs gradually towards all ~100 in `TOP_PUBLIC_LANDING_PAGES`
+
+NOTE: it's also worth mentioning that most reccuring loop systems should start as a one shot before graduating to recurring.
 
 ## With another day / week
 
-- Real GA4 + ClickHouse pull instead of mocked `cta_performance.json`
-- Real CMS write API (today the markdown plan is the "PR")
-- Multi-armed bandit per blog (today: single best variant)
-- Expand from 5 seed blogs to all ~100 in `TOP_PUBLIC_LANDING_PAGES`
-- An eval set built from saved reviewer decisions for reviewer accuracy regression tests
-- Annotate live A/B tests so we can sanity-check our CTR floor / strong thresholds against reality
+- Polish the script with more testing and review
+- Polish the prompts (especially for the content it puts together, to align with Bold as a brand)
+- Add a third (and maybe fourth) agent (breaking up read, decide, and write)
+- Possibly A/B tests on high traffic pages
+- Daily check on performance for impacted pages if getting worse (a PostHog chart with alerts)
+- Enforce banned phrases and terms in code rather than LLM
+- AI eval system to better measure quality and regressions before shipping
+  - Ideally this solution would work for many projects
+- Add an agent decision tree for future LLM debugging
+  - Ideally this solution would work for many projects
 
-## Out of scope
+## Out of scope for the project
 
 - Real A/B runner (performance is mocked)
 - Real CMS push (today the markdown plan is the "PR")
 - Production scheduler / hosting (it runs locally as a CLI)
 - Live analytics ingestion (GA4 / ClickHouse pulls are mocked)
-- Vector DB (the small catalog fits in-prompt)
-- Web UI (markdown is enough)
-- Pre-generator "min CTA age" cooldown (e.g. 7 days before re-touching a CTA). The design intent is to wait for perf to stabilize before churning copy, but it's intentionally not enforced in this implementation so week 1 and week 2 demo runs can execute back-to-back.
+- Database (the small catalog fits in-prompt)
+- Web UI output (currently just outputting in markdown)
+- 7-day cooldown filter (removed this for demo purposees, the real thing would wait 7 days before making changes)
 
 ## Testing
 
@@ -145,8 +163,8 @@ pytest -q                       # 21 unit tests (guardrails, prioritize, state)
 
 For review, the supporting material lives in `human/`:
 
-- [`human/sample-output/`](human/sample-output/) - two real weekly runs against the live API
-- [`human/design/part-2-system-a.md`](human/design/part-2-system-a.md) - second agentic system design
-- [`human/design/part-2-system-b.md`](human/design/part-2-system-b.md) - third agentic system design
-- [`human/design/part-3-fake-wins.md`](human/design/part-3-fake-wins.md) - avoiding fake wins
+- `[human/sample-output/](human/sample-output/)` - two real weekly runs against the live API
+- `[human/design/part-2-system-a.md](human/design/part-2-system-a.md)` - second agentic system design
+- `[human/design/part-2-system-b.md](human/design/part-2-system-b.md)` - third agentic system design
+- `[human/design/part-3-fake-wins.md](human/design/part-3-fake-wins.md)` - avoiding fake wins
 
