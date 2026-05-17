@@ -1,5 +1,5 @@
 {
-  "_comment": "Derived from data.xlsx TOP_PUBLIC_LANDING_PAGES (real Bold organic + GSC numbers). blog_to_sgp_baseline_submit_rate is the baseline submit rate measured when CTAs were absent - blogs at about 0.5% vs SGPs at about 15%.",
+  "_comment": "Derived from human/inputs/data.xlsx TOP_PUBLIC_LANDING_PAGES (real Bold organic + GSC numbers). blog_to_sgp_baseline_submit_rate is the baseline submit rate measured when CTAs were absent - blogs at about 0.5% vs SGPs at about 15%.",
   "blogs": {
     "https://bold.org/blog/best-physical-therapy-schools/": {
       "sessions_organic_google": 386,

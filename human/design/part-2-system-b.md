@@ -29,7 +29,7 @@ A single GitHub PR with:
 - `public/llms.txt` - structured site map for AI assistants.
 - JSON-LD blocks injected into page templates per type (SGP, scholarship-detail, blog).
 - Canonical / redirect patches for the handful of pages flagged in `TECH_INDEX_SIGNALS`.
-- [`AGENTS.md`](../AGENTS.md) rule line added to the repo root doc.
+- [`AGENTS.md`](../../AGENTS.md) rule line added to the repo root doc.
 - PR check rule.
 
 ## Guardrails

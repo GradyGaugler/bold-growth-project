@@ -1,9 +1,9 @@
 """CLI entrypoint and weekly-loop orchestrator.
 
-    python -m agent.run                  # one weekly run (real LLM calls)
-    python -m agent.run --dry-run        # smoke the pipeline, no LLM, no writes
-    python -m agent.run --week 2026-05-23  # custom artifacts label
-    python -m agent.run --simulate-perf  # advance mocked perf for the loop demo
+    python3 -m agent.run                  # one weekly run (real LLM calls)
+    python3 -m agent.run --dry-run        # smoke the pipeline, no LLM, no writes
+    python3 -m agent.run --week 2026-05-23  # custom artifacts label
+    python3 -m agent.run --simulate-perf  # advance mocked perf for the loop demo
 """
 
 from __future__ import annotations
@@ -358,7 +358,7 @@ def simulate_perf(*, seed: int = 7) -> None:
         }
 
     payload = {
-        "_comment": "Mock perf written by `python -m agent.run --simulate-perf`. Deterministic given the same seed.",
+        "_comment": "Mock perf written by `python3 -m agent.run --simulate-perf`. Deterministic given the same seed.",
         "measurements": measurements,
     }
     config.CTA_PERFORMANCE_FILE.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")

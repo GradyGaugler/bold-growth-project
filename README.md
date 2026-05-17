@@ -6,7 +6,7 @@ Repo: `https://github.com/<owner>/bold-growth-project` *(swap in real URL on pus
 
 ## Problem and why this one
 
-`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See [`thoughts.md`](thoughts.md) for the other nine candidate opportunities.
+`human/inputs/data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See [`human/research/thoughts.md`](human/research/thoughts.md) for the other nine candidate opportunities.
 
 ## Why a recurring loop
 
@@ -132,11 +132,12 @@ python3 -m agent.run --dry-run  # smoke the pipeline end-to-end, no LLM, no writ
 pytest -q                       # 21 unit tests (guardrails, prioritize, state)
 ```
 
-## Part 2 + Part 3 deliverables
+## Other deliverables
 
-Separate from this build, see:
+For review, the supporting material lives in `human/`:
 
-- [`design/part-2-system-a.md`](design/part-2-system-a.md) - second agentic system design
-- [`design/part-2-system-b.md`](design/part-2-system-b.md) - third agentic system design
-- [`design/part-3-fake-wins.md`](design/part-3-fake-wins.md) - avoiding fake wins
+- [`human/sample-output/`](human/sample-output/) - two real weekly runs against the live API
+- [`human/design/part-2-system-a.md`](human/design/part-2-system-a.md) - second agentic system design
+- [`human/design/part-2-system-b.md`](human/design/part-2-system-b.md) - third agentic system design
+- [`human/design/part-3-fake-wins.md`](human/design/part-3-fake-wins.md) - avoiding fake wins
 

@@ -1,5 +1,5 @@
 {
-  "_comment": "Mock perf written by `python -m agent.run --simulate-perf`. Deterministic given the same seed.",
+  "_comment": "Mock perf written by `python3 -m agent.run --simulate-perf`. Deterministic given the same seed.",
   "measurements": {
     "https://bold.org/blog/best-architecture-colleges/": {
       "blog_to_sgp_sessions": 1,

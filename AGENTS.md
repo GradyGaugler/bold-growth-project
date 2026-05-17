@@ -20,8 +20,8 @@ Senior-PM lens: data-grounded problem selection, taste about which agentic *shap
 
 ## Reference Material
 
-- `instructions.pdf` — full prompt + live page references.
-- `data.xlsx` — sole dataset. Tabs:
+- `human/inputs/instructions.pdf` — full prompt + live page references.
+- `human/inputs/data.xlsx` — sole dataset. Tabs:
   - `README` — definitions, funnel math, surface mapping.
   - `PAGE_TYPE_FUNNEL` — sessions → submit → verify → D7 activation, by surface.
   - `DEVICE_SPLIT` — desktop/mobile top-of-funnel + form diagnostics.
@@ -32,11 +32,8 @@ Senior-PM lens: data-grounded problem selection, taste about which agentic *shap
 
 ## Directory
 
-```
-.
-├── AGENTS.md                                                          # this file
-├── instructions.pdf                                                   # prompt
-└── data.xlsx                                                          # dataset
-```
-
-Additional folders will be added as the build progresses (e.g. `analysis/`, `agent/`, `artifacts/`, `README.md`).
+- **`README.md`** — reviewer entry point.
+- **`agent/`** — runnable agent + prompts.
+- **`human/`** — prompt inputs, research notes, sample output, and Part 2/3 designs.
+- **`mocks/`**, **`tests/`** — local fixtures and pytest coverage.
+- Local runs write **`artifacts/`** and **`state/`** (mostly gitignored).

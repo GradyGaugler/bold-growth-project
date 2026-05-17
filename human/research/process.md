@@ -6,10 +6,10 @@ A succinct log of the steps taken on this take-home (for part 1)
 2. Generated `AGENTS.md` to give the agent the context it needed about what's going on.
 3. Read the instructions thoroughly, then asked AI to clarify the pieces I was unsure about to confirm my understanding.
 4. Had AI open all 8 referenced pages and reviewed each one myself.
-5. Started `thoughts.md` as a train-of-thought log while working through the pages and data.
+5. Started `human/research/thoughts.md` as a train-of-thought log while working through the pages and data.
 6. Walked the spreadsheet tab by tab, building intuition and flagging anything that stood out.
 7. Asked AI to analyze each tab one by one and surface trends independently.
-8. Captured the notable findings in `thoughts.md`.
+8. Captured the notable findings in `human/research/thoughts.md`.
 9. Brainstormed ideas tied to those findings — opportunities worth addressing.
 10. Asked AI to review the chat and doc for ideas I'd missed, and to generate fresh ones.
 11. Picked what to build and worked with AI to design it — started from my own thinking, then let AI fill in technical detail and pressure-test it against the instructions PDF.
