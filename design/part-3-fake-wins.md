@@ -1,9 +1,7 @@
 # Part 3 - Instrumentation Watchdog
 
 **Shape:** event-triggered.  
-**One-liner:** anomaly-driven agent that watches event-count health, files a
-plain-English incident the moment something violates a known invariant, and
-proposes the root-cause hypothesis a data engineer would write themselves.
+**One-liner:** anomaly-driven agent that watches event-count health, files a plain-English incident the moment something violates a known invariant, and proposes the root-cause hypothesis a data engineer would write themselves.
 
 ## Problem and why this one
 
@@ -30,16 +28,11 @@ One hour after any of:
 - a **feature flag** flips (LaunchDarkly / Statsig webhook), or
 - a **CMS publish** (Bold's content stack).
 
-The 1-hour delay gives traffic time to accumulate enough volume for the
-checks to be meaningful. On fire, the agent runs its detectors against the
-trailing window:
+The 1-hour delay gives traffic time to accumulate enough volume for the checks to be meaningful. On fire, the agent runs its detectors against the trailing window:
 
-- a **hard invariant** is violated (`account_created > session_start`,
-`submit > session_start`, child-event > parent-event),
-- a **pair-relation** drifts outside its registered band (e.g.
-`donor_registration` / `donor_registration2` ratio leaves `[0.85, 1.15]`),
-- a **GA4↔ClickHouse parity** for any event leaves `[0.4, 0.6]` (using the  
-baseline already visible in the data), or
+- a **hard invariant** is violated (`account_created > session_start`, `submit > session_start`, child-event > parent-event),
+- a **pair-relation** drifts outside its registered band (e.g. `donor_registration` / `donor_registration2` ratio leaves `[0.85, 1.15]`),
+- a **GA4↔ClickHouse parity** for any event leaves `[0.4, 0.6]` (using the baseline already visible in the data), or
 
 Any check failing → file an incident.
 

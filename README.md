@@ -1,31 +1,18 @@
 # Blog → SGP Routing Agent
 
-Take-home for the Product Manager, Agentic Growth role at Bold.org.
-Recurring-loop agent that, each week, picks the most relevant scholarship page
-(SGP) for every Bold blog post and writes a contextual CTA - gated by a
-separate reviewer agent and a human-approvable markdown artifact.
+Take-home for the Product Manager, Agentic Growth role at Bold.org. Recurring-loop agent that, each week, picks the most relevant scholarship page (SGP) for every Bold blog post and writes a contextual CTA - gated by a separate reviewer agent and a human-approvable markdown artifact.
 
-Repo: `https://github.com/<owner>/bold-growth-project` _(swap in real URL on push)_
+Repo: `https://github.com/<owner>/bold-growth-project` *(swap in real URL on push)*
 
 ## Problem and why this one
 
-`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at
-**~15%** - a 30x gap on the highest-impressions surface (1.1M GSC
-impressions/month). The single biggest top-of-funnel lever Bold has is
-routing blog readers to the right SGP with copy that matches the blog's
-intent. See [`thoughts.md`](thoughts.md) for the other nine candidate
-opportunities and why this one wins on impact × buildability × reviewer
-clarity.
+`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See [`thoughts.md`](thoughts.md) for the other nine candidate opportunities.
 
-## Why a recurring loop (and not one-shot or event-triggered)
+## Why a recurring loop
 
-The inputs change every week: new blogs ship, SGPs get refreshed, CTA
-performance drifts. A one-shot generator would rot in weeks; an
-event-triggered system would only react when something pushes, not when
-performance silently sags. A weekly loop with persisted state can rewrite
-underperformers, retire dead-end CTAs, and add CTAs for newly-changed blogs
-based on hash deltas - exactly the kind of judgmental-but-bounded work an
-LLM with a critic handles well.
+This problem needs iteration, not a one-time rewrite. The agent has to keep testing which CTA copy, reader intent, and destination page actually earn clicks, then rewrite or retire what does not stick.
+
+It also has a moving surface area: new blog posts appear, existing posts change, and new SGPs become available. A recurring loop lets the system keep adding those opportunities to the queue instead of freezing the routing map at one point in time.
 
 ## Architecture
 
@@ -46,9 +33,7 @@ flowchart TD
     writeArtifacts --> persistState["Persist new state"]
 ```
 
-_Diagram is intentionally high-level. Guardrails fire at four layers
-(pre-queue, prompt-level, post-generator, post-reviewer); see the Guardrails
-section below for the full list._
+
 
 ## Repo layout
 
@@ -103,18 +88,11 @@ python -m agent.run --week 2-2026-05-23       # second run; loop behaves differe
 pytest -q                                     # 30 tests
 ```
 
-See [`sample_output/`](sample_output/) for two real runs already executed
-against bold.org with the real OpenAI API (~$0.26 of LLM spend across both).
-Week 2 shows 3 `keep`, 1 `rewrite`, 1 to human review - proof the loop
-actually behaves differently the second time.
+See [`sample_output/`](sample_output/) for two real runs already executed against bold.org with the real OpenAI API (~$0.26 of LLM spend across both). Week 2 shows 3 `keep`, 1 `rewrite`, 1 to human review - proof the loop actually behaves differently the second time.
 
 ## Workflow artifact
 
-[`agent/prompts/`](agent/prompts/) IS the workflow-artifact deliverable. A PM
-edits those two markdown files to change agent behavior - no Python, no
-redeploy. Each prompt opens with a short HTML-comment block of edit-safety
-rules. Threshold tuning lives in [`agent/config.py`](agent/config.py)
-(intentionally code, since it's policy).
+[`agent/prompts/`](agent/prompts/) IS the workflow-artifact deliverable. A PM edits those two markdown files to change agent behavior - no Python, no redeploy. Each prompt opens with a short HTML-comment block of edit-safety rules. Threshold tuning lives in [`agent/config.py`](agent/config.py) (intentionally code, since it's policy).
 
 ## Guardrails
 
@@ -128,19 +106,13 @@ Four layers, intentionally redundant:
 
 ## Riskiest part
 
-The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog.
-Mitigations layered: catalog-bounded outputs (schema enum), separate reviewer
-in a fresh context, min-age + similarity + diversity + weekly caps, the
-human-approvable `plan.md` artifact (nothing auto-ships today), retire-after-3-fails,
-the circuit breaker, the cost cap, and the full `run.log` audit trail.
+The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog. Mitigations layered: catalog-bounded outputs (schema enum), separate reviewer in a fresh context, min-age + similarity + diversity + weekly caps, the human-approvable `plan.md` artifact (nothing auto-ships today), retire-after-3-fails, the circuit breaker, the cost cap, and the full `run.log` audit trail.
 
 ## Trust ladder
 
 1. **Today**: human approves all of `plan.md` before "deploy".
-2. **Next**: human still approves `add` + `retire`; `rewrite` of an already-converting
-   CTA (CTR ≥ strong) auto-ships.
-3. **Later**: fully autonomous on `rewrite`; humans get a weekly digest, not an
-   approval gate.
+2. **Next**: human still approves `add` + `retire`; `rewrite` of an already-converting CTA (CTR ≥ strong) auto-ships.
+3. **Later**: fully autonomous on `rewrite`; humans get a weekly digest, not an approval gate.
 
 ## With another day / week
 
@@ -153,13 +125,17 @@ the circuit breaker, the cost cap, and the full `run.log` audit trail.
 
 ## Out of scope
 
-No real A/B runner (mocked perf), no real CMS push, no vector DB (small catalog
-fits in-prompt), no web UI (markdown is enough).
+- Real A/B runner (performance is mocked)
+- Real CMS push (today the diff is the "PR")
+- Production scheduler / hosting (it runs locally as a CLI)
+- Live analytics ingestion (GA4 / ClickHouse pulls are mocked)
+- Vector DB (the small catalog fits in-prompt)
+- Web UI (markdown is enough)
 
 ## Part 2 + Part 3 deliverables
 
 Separate from this build, see:
 
 - [`design/part-2-system-a.md`](design/part-2-system-a.md) - second agentic system design
-- [`design/part-2-system-b.md`](design/part-2-system-b.md) - third agentic system design (different shape than Part 1)
+- [`design/part-2-system-b.md`](design/part-2-system-b.md) - third agentic system design
 - [`design/part-3-fake-wins.md`](design/part-3-fake-wins.md) - avoiding fake wins

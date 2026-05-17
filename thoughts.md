@@ -38,7 +38,7 @@ String of consiousness thoughts to improve [bold.org](http://bold.org) site for 
   - Either clickhouse or GA4 is duplicate counting. This is because the ratios all are around 0.5 of the other (0.4 to 0.6). Clickhouse is likely source of truth, GA4 is not trustworthy.
   - For some reason GA4 catches 60% of blog but 40% of the other pages - possible indicator of something being different with the blog page tracking.
 - Experiment summary
-  - The SGP by year pages redesign test is not showing a real difference in the numbers. 
+  - The SGP by year pages redesign test is not showing a real difference in the numbers.
   - Can't be sure because it is NOT stat sig yet. Depending on how long this has run for, I'd keep it running. If it has been going on for multiple weeks I'd call it quits.
 
 ## Identified opportunities
