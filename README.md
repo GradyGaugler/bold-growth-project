@@ -35,34 +35,6 @@ flowchart TD
 
 
 
-## Repo layout
-
-```text
-bold-growth-project/
-  agent/
-    run.py          # CLI + weekly-loop orchestrator
-    config.py       # thresholds, model names, banned phrases, cost cap
-    scrape.py       # blog + SGP fetchers (requests + bs4), disk-cached
-    llm.py          # OpenAI wrapper: JSON-schema outputs + cost meter
-    generator.py    # generator agent (picks target_url + writes copy)
-    reviewer.py     # reviewer agent (scores + verdict in a fresh context)
-    guardrails.py   # all hard rules
-    state.py        # atomic JSON state + history
-    prioritize.py   # queue selection + decision rules (pure functions)
-    artifacts.py    # plan.md renderer
-    prompts/
-      generator.md  # PM-facing (edit-safety rules in an HTML comment at the top)
-      reviewer.md
-  mocks/            # seed blogs, seed catalog, baseline + perf JSON
-  state/            # cta_state.json + cached HTML
-  artifacts/        # week-YYYY-MM-DD/plan.md
-  sample_output/    # checked-in real outputs from two runs
-  tests/            # guardrails, prioritize, state (21 tests)
-  design/           # Part 2 + Part 3 deliverables
-  pyproject.toml
-  README.md
-```
-
 ## What runs when you `python3 -m agent.run`
 
 1. Load the currently-deployed CTAs and their performance history.
