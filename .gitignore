@@ -17,3 +17,4 @@ human/artifacts/
 .venv/
 venv/
 .DS_Store
+.cursor/
