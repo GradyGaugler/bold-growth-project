@@ -55,7 +55,8 @@ SCRAPE_USER_AGENT = "bold-growth-agent/0.1 (take-home; respectful crawler)"
 SCRAPE_RATE_LIMIT_SECONDS = 1.0
 SCRAPE_TIMEOUT_SECONDS = 15
 
-# Hard brand-voice guardrails. Listed in the generator prompt AND post-checked.
+# Brand-voice hints inlined into the generator prompt. The reviewer agent
+# enforces brand safety; there is no separate post-check.
 BANNED_PHRASES = [
     "guaranteed",
     "free money",

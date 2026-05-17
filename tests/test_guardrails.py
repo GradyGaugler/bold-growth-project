@@ -65,17 +65,6 @@ def test_off_domain_is_rejected():
     assert "off_domain" in codes
 
 
-def test_banned_phrase_is_rejected_even_when_otherwise_valid():
-    result = check_proposal_structure(
-        proposal=_valid_proposal(headline="100% free money for nursing students"),
-        catalog_urls=CATALOG,
-        current_cta=None,
-        verify_url_live=False,
-    )
-    codes = {f.code for f in result.failures}
-    assert "banned_phrase" in codes
-
-
 def test_oversized_headline_is_rejected():
     too_long = "x" * (config.HEADLINE_MAX_CHARS + 5)
     result = check_proposal_structure(

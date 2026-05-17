@@ -66,14 +66,6 @@ def _parse_iso(s: str) -> datetime:
     return dt
 
 
-def _contains_banned_phrase(text: str) -> str | None:
-    lowered = text.lower()
-    for phrase in config.BANNED_PHRASES:
-        if phrase.lower() in lowered:
-            return phrase
-    return None
-
-
 # Process-wide cache so we don't HEAD the same catalog URL once per proposal.
 # Cleared by `reset_url_cache()` between test runs.
 _url_resolve_cache: dict[str, bool] = {}
@@ -151,14 +143,6 @@ def check_proposal_structure(
         failures.append(GuardrailFailure("headline_too_long", f"{len(headline)} > {config.HEADLINE_MAX_CHARS}"))
     if len(body) > config.BODY_MAX_CHARS:
         failures.append(GuardrailFailure("body_too_long", f"{len(body)} > {config.BODY_MAX_CHARS}"))
-
-    # Banned phrases (defense in depth with the prompt).
-    for field, text in (("headline", headline), ("body", body)):
-        hit = _contains_banned_phrase(text)
-        if hit:
-            failures.append(
-                GuardrailFailure("banned_phrase", f"{field} contains banned phrase {hit!r}")
-            )
 
     # Similarity vs current CTA (don't churn for cosmetic changes).
     if current_cta and current_cta.get("headline") is not None:

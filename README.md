@@ -22,7 +22,7 @@ flowchart TD
     loadState --> scrape["Scrape blogs + SGP catalog (disk-cached)"]
     scrape --> prioritize["Prioritize blogs by traffic x staleness x CTA perf<br/>(also forces rewrite on blog content_hash change)"]
     prioritize --> generator["Generator agent (gpt-5.4-mini, high effort)<br/>picks target_url + writes copy"]
-    generator --> guardrails["Hard guardrails<br/>(link, length, brand, similarity)"]
+    generator --> guardrails["Hard guardrails<br/>(link, length, similarity)"]
     guardrails -->|pass| reviewer["Reviewer agent (gpt-5.4, medium effort, fresh context)<br/>scores + verdict"]
     guardrails -->|fail| humanQueue["needs_human_review"]
     reviewer -->|approve| approved["Approved changes"]
@@ -57,7 +57,7 @@ bold-growth-project/
   state/            # cta_state.json + cached HTML
   artifacts/        # week-YYYY-MM-DD/plan.md
   sample_output/    # checked-in real outputs from two runs
-  tests/            # guardrails, prioritize, state (22 tests)
+  tests/            # guardrails, prioritize, state (21 tests)
   design/           # Part 2 + Part 3 deliverables
   pyproject.toml
   README.md
@@ -65,47 +65,60 @@ bold-growth-project/
 
 ## What runs when you `python -m agent.run`
 
-1. Load `state/cta_state.json` (deployed CTAs + history) and the mock files (baseline, perf, plus the two seed lists).
-2. Scrape each seed blog and each seed SGP from bold.org (disk-cached - reruns are deterministic).
-3. Build the queue: for each blog, decide `add` / `rewrite` / `keep` / `retire` based on (a) whether a CTA exists, (b) whether the blog's `content_hash` changed since deploy, (c) measured CTR vs floor / strong thresholds, (d) consecutive rewrites without lift.
-4. Per actionable blog: call the **generator** (`gpt-5.4-mini`, `reasoning_effort=high`) with the blog excerpt + the full catalog as a JSON-schema enum, so the model literally cannot hallucinate a target URL.
-5. Run cheap structural guardrails (link resolves, on-domain, length caps, banned phrases, similarity vs current CTA).
-6. If structure passes, call the **reviewer** (`gpt-5.4`, `reasoning_effort=medium`) with a fresh context - no "we just wrote this" framing - and route on its verdict (`approve` / `revise` / `reject`). One revise retry, max.
-7. Persist the new state (atomic write) and emit `plan.md`, the PR-style artifact a PM approves.
+1. Load the currently-deployed CTAs and their performance history.
+2. Fetch the blogs and SGP catalog from bold.org.
+3. Decide what to do with each blog - `add`, `rewrite`, `keep`, or `retire` - based on whether it already has a CTA, whether the blog content changed, how the current CTA is performing, and how many rewrites it has already burned through.
+4. For each blog that needs work, the **generator** (`gpt-5.4-mini`) picks a target SGP from the catalog and writes the CTA copy.
+5. Run cheap structural checks: link resolves, stays on-domain, fits the length caps, not too similar to the current CTA.
+6. If that passes, the **reviewer** (separate agent, `gpt-5.4`) scores the CTA in a fresh context and returns `approve` / `revise` / `reject`. One retry on `revise`, then it goes to human review.
+7. Save the new state and write `plan.md` - the PR-style artifact a PM approves.
 
 ## How to run it
 
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-cp .env.example .env   # then paste in your OPENAI_API_KEY
+### Setup
 
-python -m agent.run --dry-run                 # smoke the pipeline, no LLM, no writes
+```bash
+# create a venv and install the agent
+python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
+
+# paste your key into .env (read by python-dotenv at runtime)
+cp .env.example .env
+```
+
+### Run it
+
+```bash
 python -m agent.run --week 1-2026-05-16       # one weekly run (real LLM calls)
 python -m agent.run --simulate-perf           # write deterministic mocked perf
 python -m agent.run --week 2-2026-05-23       # second run; loop behaves differently
-pytest -q                                     # 22 tests
 ```
 
-See [`sample_output/`](sample_output/) for two real runs already executed against bold.org with the real OpenAI API (~$0.26 of LLM spend across both). Week 2 shows 3 `keep`, 1 `rewrite`, 1 to human review - proof the loop actually behaves differently the second time.
+### Output - workflow artifacts
 
-## Workflow artifact
+Each run writes:
 
-[`agent/prompts/`](agent/prompts/) IS the workflow-artifact deliverable. A PM edits those two markdown files to change agent behavior - no Python, no redeploy. Each prompt opens with a short HTML-comment block of edit-safety rules. Threshold tuning lives in [`agent/config.py`](agent/config.py) (intentionally code, since it's policy).
+- `artifacts/week-<label>/plan.md` - the PR-style artifact a PM approves.
+  - Approved CTAs (target SGP + new headline/body) and what they replace.
+  - Items kept (current CTA is still good enough) and retired (3 failed rewrites in a row).
+  - Anything routed to human review, and why.
+  - Run cost: token counts, $ spent, vs. the $1 cap.
+- `state/cta_state.json` - updated deployed-CTA state + per-blog history (carries into next week's run).
+
+The agent is driven by two prompts a PM owns and edits, plus one config file:
+
+- [`agent/prompts/generator.md`](agent/prompts/generator.md) - tells the generator how to pick a target SGP and write the CTA copy.
+- [`agent/prompts/reviewer.md`](agent/prompts/reviewer.md) - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject.
+- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in [`agent/config.py`](agent/config.py) - intentionally code, since it's policy.
 
 ## Guardrails
 
-Five layers, intentionally redundant:
+Five layers, each catching a different failure mode:
 
 - **Pre-generator**: `MIN_CTA_AGE_DAYS=7` (don't churn our own work before perf stabilizes)
 - **Prompt-level**: banned phrases inlined in the generator prompt; `target_url` schema-enum constrained to the real catalog (hallucinated paths are unrepresentable)
-- **Post-generator**: HEAD-request URL check + on-domain check; length caps (70 / 200 chars); banned-phrase post-check; `difflib` similarity vs current CTA (block no-op rewrites)
-- **Post-reviewer**: separate reviewer approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact
+- **Post-generator**: HEAD-request URL check + on-domain check; length caps (70 / 200 chars); `difflib` similarity vs current CTA (block no-op rewrites)
+- **Post-reviewer**: separate reviewer agent in a fresh context, with an approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact. Brand safety (banned phrases, hype, false promises) is enforced here, not in code
 - **Run-level**: hard `$1.00` cost cap (raises `CostCapExceeded`); deterministic via the disk cache
-
-## Riskiest part
-
-The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog. Mitigations layered: catalog-bounded outputs (schema enum), separate reviewer in a fresh context, min-age + similarity checks, the human-approvable `plan.md` artifact (nothing auto-ships today), retire-after-3-fails, and the cost cap.
 
 ## Trust ladder
 
@@ -131,6 +144,13 @@ The generator picks a wrong-but-plausible SGP and tanks a high-traffic blog. Mit
 - Vector DB (the small catalog fits in-prompt)
 - Web UI (markdown is enough)
 
+## Testing
+
+```bash
+python -m agent.run --dry-run   # smoke the pipeline end-to-end, no LLM, no writes
+pytest -q                       # 21 unit tests (guardrails, prioritize, state)
+```
+
 ## Part 2 + Part 3 deliverables
 
 Separate from this build, see:
@@ -138,3 +158,4 @@ Separate from this build, see:
 - [`design/part-2-system-a.md`](design/part-2-system-a.md) - second agentic system design
 - [`design/part-2-system-b.md`](design/part-2-system-b.md) - third agentic system design
 - [`design/part-3-fake-wins.md`](design/part-3-fake-wins.md) - avoiding fake wins
+
