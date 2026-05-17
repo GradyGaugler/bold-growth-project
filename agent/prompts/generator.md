@@ -5,7 +5,7 @@ Edit-safety rules (PM-facing; no Python required):
 1. Don't remove the `## System` and `## User template` headings - the loader splits on them.
 2. Keep `{placeholders}` exactly as written - Python `.format()` will raise if you rename one.
 3. Banned phrases live in `agent/config.py` and are inlined here; the reviewer agent enforces brand safety.
-4. Test with `python -m agent.run --dry-run`, then a real run and review `artifacts/week-*/plan.md`.
+4. Test with `python3 -m agent.run --dry-run`, then a real run and review `artifacts/week-*/plan.md`.
 -->
 
 ## System

@@ -6,7 +6,7 @@ Repo: `https://github.com/<owner>/bold-growth-project` *(swap in real URL on pus
 
 ## Problem and why this one
 
-`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See [`thoughts.md`](thoughts.md) for the other nine candidate opportunities.
+`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See `[thoughts.md](thoughts.md)` for the other nine candidate opportunities.
 
 ## Why a recurring loop
 
@@ -18,7 +18,7 @@ It also has a moving surface area: new blog posts appear, existing posts change,
 
 ```mermaid
 flowchart TD
-    runCmd["python -m agent.run"] --> loadState["Load state + mocked perf"]
+    runCmd["python3 -m agent.run"] --> loadState["Load state + mocked perf"]
     loadState --> scrape["Scrape blogs + SGP catalog (disk-cached)"]
     scrape --> prioritize["Prioritize blogs by traffic x staleness x CTA perf<br/>(also forces rewrite on blog content_hash change)"]
     prioritize --> generator["Generator agent (gpt-5.4-mini, high effort)<br/>picks target_url + writes copy"]
@@ -63,7 +63,7 @@ bold-growth-project/
   README.md
 ```
 
-## What runs when you `python -m agent.run`
+## What runs when you `python3 -m agent.run`
 
 1. Load the currently-deployed CTAs and their performance history.
 2. Fetch the blogs and SGP catalog from bold.org.
@@ -78,19 +78,26 @@ bold-growth-project/
 ### Setup
 
 ```bash
-# create a venv and install the agent
-python -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"
-
-# paste your key into .env (read by python-dotenv at runtime)
+# create a venv
+python3 -m venv .venv
+# select that new venv
+source .venv/bin/activate
+# install the agent and test dependencies
+pip install -e ".[dev]"
+# paste your key into .env
 cp .env.example .env
 ```
+
+
+
+On Windows, use `py` instead of `python3` and activate with `.venv\Scripts\activate`.
 
 ### Run it
 
 ```bash
-python -m agent.run --week 1-2026-05-16       # one weekly run (real LLM calls)
-python -m agent.run --simulate-perf           # write deterministic mocked perf
-python -m agent.run --week 2-2026-05-23       # second run; loop behaves differently
+python3 -m agent.run --week 1-2026-05-16       # one weekly run (real LLM calls)
+python3 -m agent.run --simulate-perf           # write deterministic mocked perf
+python3 -m agent.run --week 2-2026-05-23       # second run; loop behaves differently
 ```
 
 ### Output - workflow artifacts
@@ -106,9 +113,9 @@ Each run writes:
 
 The agent is driven by two prompts a PM owns and edits, plus one config file:
 
-- [`agent/prompts/generator.md`](agent/prompts/generator.md) - tells the generator how to pick a target SGP and write the CTA copy.
-- [`agent/prompts/reviewer.md`](agent/prompts/reviewer.md) - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject.
-- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in [`agent/config.py`](agent/config.py) - intentionally code, since it's policy.
+- `[agent/prompts/generator.md](agent/prompts/generator.md)` - tells the generator how to pick a target SGP and write the CTA copy.
+- `[agent/prompts/reviewer.md](agent/prompts/reviewer.md)` - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject.
+- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in `[agent/config.py](agent/config.py)` - intentionally code, since it's policy.
 
 ## Guardrails
 
@@ -147,7 +154,7 @@ Five layers, each catching a different failure mode:
 ## Testing
 
 ```bash
-python -m agent.run --dry-run   # smoke the pipeline end-to-end, no LLM, no writes
+python3 -m agent.run --dry-run  # smoke the pipeline end-to-end, no LLM, no writes
 pytest -q                       # 21 unit tests (guardrails, prioritize, state)
 ```
 
@@ -155,7 +162,7 @@ pytest -q                       # 21 unit tests (guardrails, prioritize, state)
 
 Separate from this build, see:
 
-- [`design/part-2-system-a.md`](design/part-2-system-a.md) - second agentic system design
-- [`design/part-2-system-b.md`](design/part-2-system-b.md) - third agentic system design
-- [`design/part-3-fake-wins.md`](design/part-3-fake-wins.md) - avoiding fake wins
+- `[design/part-2-system-a.md](design/part-2-system-a.md)` - second agentic system design
+- `[design/part-2-system-b.md](design/part-2-system-b.md)` - third agentic system design
+- `[design/part-3-fake-wins.md](design/part-3-fake-wins.md)` - avoiding fake wins
 
