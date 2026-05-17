@@ -16,11 +16,20 @@ _SYS_MARKER = "## System"
 _USER_MARKER = "## User template"
 
 
+def _heading_start(text: str, marker: str) -> int:
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        if line.strip() == marker:
+            return offset
+        offset += len(line)
+    raise ValueError(f"Prompt file is missing heading: {marker}")
+
+
 def load_prompt(path: Path) -> tuple[str, str]:
     """Return (system_prompt, user_template) parsed from a prompt markdown file."""
     text = path.read_text(encoding="utf-8")
-    sys_start = text.index(_SYS_MARKER) + len(_SYS_MARKER)
-    user_start = text.index(_USER_MARKER)
+    sys_start = _heading_start(text, _SYS_MARKER) + len(_SYS_MARKER)
+    user_start = _heading_start(text, _USER_MARKER)
     system = text[sys_start:user_start].strip()
     user = text[user_start + len(_USER_MARKER):].strip()
     return system, user

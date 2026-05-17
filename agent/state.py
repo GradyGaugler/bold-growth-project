@@ -55,10 +55,6 @@ def get_blog_state(state: dict[str, Any], blog_url: str) -> dict[str, Any]:
     })
 
 
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-
 def today_iso() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
@@ -71,14 +67,16 @@ def record_deploy(
     content_hash: str,
     action: str,
     perf_snapshot: dict[str, Any] | None,
+    run_at: datetime | None = None,
 ) -> None:
     """Mutate `state` in place to record a deploy. Caller is responsible for save_state."""
+    timestamp = (run_at or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     blog = get_blog_state(state, blog_url)
     prior = blog.get("current_cta")
     if prior:
         history_entry = {
             **prior,
-            "retired_at": now_iso(),
+            "retired_at": timestamp,
             "action_when_replaced": action,
             "perf_snapshot": perf_snapshot,
         }
@@ -91,21 +89,28 @@ def record_deploy(
 
     blog["current_cta"] = {
         **new_cta,
-        "deployed_at": now_iso(),
+        "deployed_at": timestamp,
     }
     blog["content_hash_at_deploy"] = content_hash
 
     state["blogs"][blog_url] = blog
 
 
-def record_retire(state: dict[str, Any], *, blog_url: str, perf_snapshot: dict[str, Any] | None) -> None:
+def record_retire(
+    state: dict[str, Any],
+    *,
+    blog_url: str,
+    perf_snapshot: dict[str, Any] | None,
+    run_at: datetime | None = None,
+) -> None:
+    timestamp = (run_at or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     blog = get_blog_state(state, blog_url)
     prior = blog.get("current_cta")
     if prior:
         blog["history"] = (blog.get("history") or []) + [
             {
                 **prior,
-                "retired_at": now_iso(),
+                "retired_at": timestamp,
                 "action_when_replaced": "retire",
                 "perf_snapshot": perf_snapshot,
             }

@@ -36,4 +36,4 @@ Senior-PM lens: data-grounded problem selection, taste about which agentic *shap
 - **`agent/`** — runnable agent + prompts.
 - **`human/`** — prompt inputs, research notes, sample output, and Part 2/3 designs.
 - **`mocks/`**, **`tests/`** — local fixtures and pytest coverage.
-- Local runs write **`artifacts/`** and **`state/`** (mostly gitignored).
+- Local runs write **`human/artifacts/`** and **`state/`** (mostly gitignored).

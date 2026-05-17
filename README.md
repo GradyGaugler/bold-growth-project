@@ -70,13 +70,22 @@ python3 -m agent.run --simulate-perf           # write deterministic mocked perf
 python3 -m agent.run --week 2-2026-05-23       # second run; loop behaves differently
 ```
 
+To replay the demo from a clean state, reset generated state and mocked perf first:
+
+```bash
+rm -rf state/cta_state.json human/artifacts/  # remove generated state + prior run artifacts
+git checkout -- mocks/cta_performance.json    # restore the tracked mock perf file after --simulate-perf overwrites it
+```
+
+The date in the `--week` label drives the run clock (e.g. `1-2026-05-16` runs as if today were 2026-05-16 UTC), so the weekly loop is reproducible regardless of wall time.
+
 ## Workflow artifacts
 
 ### Outputs
 
 Each run writes:
 
-- `artifacts/week-<label>/plan.md` - the PR-style artifact a PM approves.
+- `human/artifacts/week-<label>/plan.md` - the PR-style artifact a PM approves.
   - Approved CTAs (target SGP + new headline/body) and what they replace.
   - Items kept (current CTA is still good enough) and retired (3 failed rewrites in a row).
   - Anything routed to human review, and why.
@@ -93,9 +102,8 @@ The agent is driven by two prompts a PM owns and edits, plus one config file:
 
 ## Guardrails
 
-Five layers, each catching a different failure mode:
+Four layers, each catching a different failure mode:
 
-- **Pre-generator**: `MIN_CTA_AGE_DAYS=7` (don't churn our own work before perf stabilizes)
 - **Prompt-level**: banned phrases inlined in the generator prompt; `target_url` schema-enum constrained to the real catalog (hallucinated paths are unrepresentable)
 - **Post-generator**: HEAD-request URL check + on-domain check; length caps (70 / 200 chars); `difflib` similarity vs current CTA (block no-op rewrites)
 - **Post-reviewer**: separate reviewer agent in a fresh context, with an approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact. Brand safety (banned phrases, hype, false promises) is enforced here, not in code
@@ -124,6 +132,7 @@ Five layers, each catching a different failure mode:
 - Live analytics ingestion (GA4 / ClickHouse pulls are mocked)
 - Vector DB (the small catalog fits in-prompt)
 - Web UI (markdown is enough)
+- Pre-generator "min CTA age" cooldown (e.g. 7 days before re-touching a CTA). The design intent is to wait for perf to stabilize before churning copy, but it's intentionally not enforced in this implementation so week 1 and week 2 demo runs can execute back-to-back.
 
 ## Testing
 

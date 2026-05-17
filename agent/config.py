@@ -14,7 +14,7 @@ PROMPTS_DIR = AGENT_DIR / "prompts"
 MOCKS_DIR = ROOT_DIR / "mocks"
 STATE_DIR = ROOT_DIR / "state"
 CACHE_DIR = STATE_DIR / "cache"
-ARTIFACTS_DIR = ROOT_DIR / "artifacts"
+ARTIFACTS_DIR = ROOT_DIR / "human" / "artifacts"
 
 STATE_FILE = STATE_DIR / "cta_state.json"
 
@@ -35,7 +35,6 @@ REVIEWER_MODEL = "gpt-5.4"
 REVIEWER_EFFORT = "medium"
 
 # Run-level guardrails.
-MIN_CTA_AGE_DAYS = 7
 MAX_REWRITES_WITHOUT_LIFT = 3
 MAX_RUN_COST_USD = 1.00
 

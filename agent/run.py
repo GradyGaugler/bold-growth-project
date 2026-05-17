@@ -13,9 +13,10 @@ import json
 import logging
 import os
 import random
+import re
 import sys
 from dataclasses import asdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,6 @@ from agent.generator import CtaProposal, propose_cta
 from agent.guardrails import (
     StructureCheck,
     check_proposal_structure,
-    should_skip_blog,
 )
 from agent.llm import CostCapExceeded, CostMeter
 from agent.prioritize import QueueItem, build_queue
@@ -42,6 +42,21 @@ from agent.state import (
 )
 
 logger = logging.getLogger("agent.run")
+
+_WEEK_DATE_RE = re.compile(r"^(?:\d+-)?(?P<date>\d{4}-\d{2}-\d{2})$")
+
+
+def _run_at_for_week_label(week_label: str) -> datetime:
+    """Use the date embedded in labels like `1-2026-05-16` as the run clock."""
+    match = _WEEK_DATE_RE.match(week_label)
+    if not match:
+        logger.warning(
+            "week label %r has no embedded YYYY-MM-DD; falling back to wall clock. "
+            "Use a label like `1-2026-05-16` for reproducible runs.",
+            week_label,
+        )
+        return datetime.now(timezone.utc)
+    return datetime.fromisoformat(match.group("date")).replace(tzinfo=timezone.utc)
 
 
 def _load_mocks() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -138,7 +153,15 @@ def _run_generator_then_review(
 
 def run_once(*, week_label: str, dry_run: bool) -> Path | None:
     audit = AuditLog()
-    audit.log("run_start", week=week_label, dry_run=dry_run, generator=config.GENERATOR_MODEL, reviewer=config.REVIEWER_MODEL)
+    run_at = _run_at_for_week_label(week_label)
+    audit.log(
+        "run_start",
+        week=week_label,
+        run_at=run_at.isoformat(timespec="seconds"),
+        dry_run=dry_run,
+        generator=config.GENERATOR_MODEL,
+        reviewer=config.REVIEWER_MODEL,
+    )
 
     state = load_state()
     baseline, perf_measurements = _load_mocks()
@@ -156,7 +179,6 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
     )
     audit.log("queue_built", items=[{"blog": it.blog.url, "action": it.action, "reason": it.reason, "score": it.score} for it in queue])
 
-    today = datetime.now(timezone.utc)
     approved: list[dict[str, Any]] = []
     human_review: list[dict[str, Any]] = []
     retired: list[dict[str, Any]] = []
@@ -185,22 +207,10 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
             retired.append({"blog_url": item.blog.url, "reason": item.reason})
             audit.log("retire_decided", blog_url=item.blog.url, reason=item.reason)
             if not dry_run:
-                record_retire(state, blog_url=item.blog.url, perf_snapshot=item.perf)
+                record_retire(state, blog_url=item.blog.url, perf_snapshot=item.perf, run_at=run_at)
             continue
 
         # add | rewrite
-        skip = should_skip_blog(
-            current_cta=item.current_cta,
-            today=today,
-        )
-        if skip:
-            # Pre-generator skips don't need a human - the CTA just stays as-is
-            # until next week. Push to `kept` so the human-review queue only
-            # shows items that actually need a person.
-            kept.append({"blog_url": item.blog.url, "reason": skip.detail})
-            audit.log("pre_generator_skip", blog_url=item.blog.url, failure=asdict(skip))
-            continue
-
         if dry_run:
             audit.log("dry_run_skip_llm", blog_url=item.blog.url, action=item.action)
             kept.append({"blog_url": item.blog.url, "reason": f"dry-run: would {item.action}"})
@@ -275,13 +285,14 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
                 content_hash=item["content_hash"],
                 action=item["action"],
                 perf_snapshot=item.get("perf"),
+                run_at=run_at,
             )
-        state["last_run_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        state["last_run_at"] = run_at.isoformat(timespec="seconds")
         save_state(state)
 
     plan_context = {
         "week": week_label,
-        "run_completed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_completed_at": run_at.isoformat(timespec="seconds"),
         "generator_model": config.GENERATOR_MODEL,
         "reviewer_model": config.REVIEWER_MODEL,
         "n_blogs": len(blogs),
@@ -316,14 +327,22 @@ def run_once(*, week_label: str, dry_run: bool) -> Path | None:
     return out
 
 
-def simulate_perf(*, seed: int = 7) -> None:
+def simulate_perf(*, seed: int = 7, week_label: str | None = None) -> None:
     """Generate plausible mocked perf for everything in state.
 
     Used between weekly runs so the demo can show the loop behaving differently
     on week 2 (some CTAs measured below floor -> rewrite, some above -> keep).
     Deterministic given a seed so reviewers see the same numbers.
+
+    `week_label` (e.g. `1-2026-05-16`) pins `measured_through` to that date so
+    the mock file is stable across days. Falls back to wall-clock UTC date.
     """
     rng = random.Random(seed)
+    measured_through = (
+        _run_at_for_week_label(week_label).date().isoformat()
+        if week_label
+        else datetime.now(timezone.utc).date().isoformat()
+    )
     state = load_state()
     baseline = json.loads(config.SITE_BASELINE_FILE.read_text(encoding="utf-8"))
 
@@ -354,7 +373,7 @@ def simulate_perf(*, seed: int = 7) -> None:
             "cta_clicks": clicks,
             "blog_to_sgp_sessions": blog_to_sgp_sessions,
             "downstream_submits": downstream_submits,
-            "measured_through": datetime.now(timezone.utc).date().isoformat(),
+            "measured_through": measured_through,
         }
 
     payload = {
@@ -391,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv()
 
     if args.simulate_perf:
-        simulate_perf()
+        simulate_perf(week_label=args.week)
         return 0
 
     if not args.dry_run and not os.environ.get("OPENAI_API_KEY"):

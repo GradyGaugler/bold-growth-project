@@ -116,7 +116,15 @@ def call_json(
     while attempt <= max_retries:
         start = time.monotonic()
         try:
-            response = client.chat.completions.create(
+            logger.info(
+                "OpenAI request started: purpose=%s model=%s schema=%s attempt=%d/%d",
+                purpose,
+                model,
+                schema_name,
+                attempt + 1,
+                max_retries + 1,
+            )
+            raw_response = client.chat.completions.with_raw_response.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -132,6 +140,7 @@ def call_json(
                 },
                 **extra_kwargs,
             )
+            response = raw_response.parse()
         except (RateLimitError, APIConnectionError) as exc:
             last_err = exc
             wait = 2 ** attempt
@@ -149,6 +158,15 @@ def call_json(
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
         cost = meter.estimate(model, prompt_tokens, completion_tokens)
+        logger.info(
+            "OpenAI request completed: purpose=%s status=%s latency_ms=%d prompt_tokens=%d completion_tokens=%d cost_usd=%.4f",
+            purpose,
+            raw_response.status_code,
+            latency_ms,
+            prompt_tokens,
+            completion_tokens,
+            cost,
+        )
 
         record = CallRecord(
             model=model,

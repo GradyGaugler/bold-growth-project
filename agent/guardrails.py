@@ -2,14 +2,12 @@
 
 Organized by where in the pipeline they fire:
 
-- `should_skip_blog` : pre-generator (filter the queue)
 - `check_proposal_structure` : post-generator, pre-reviewer (cheap structural checks)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from difflib import SequenceMatcher
 import logging
 from typing import Any
@@ -37,33 +35,6 @@ class StructureCheck:
     @property
     def ok(self) -> bool:
         return not self.failures
-
-
-def should_skip_blog(
-    *,
-    current_cta: dict[str, Any] | None,
-    today: datetime,
-) -> GuardrailFailure | None:
-    """Pre-generator: filter blogs we won't touch this run. None => proceed."""
-    if current_cta and current_cta.get("deployed_at"):
-        deployed = _parse_iso(current_cta["deployed_at"])
-        age_days = (today - deployed).days
-        if age_days < config.MIN_CTA_AGE_DAYS:
-            return GuardrailFailure(
-                "min_age",
-                f"CTA deployed {age_days}d ago, below MIN_CTA_AGE_DAYS={config.MIN_CTA_AGE_DAYS}",
-            )
-    return None
-
-
-def _parse_iso(s: str) -> datetime:
-    # Tolerate trailing Z (which fromisoformat doesn't accept on some Pythons).
-    if s.endswith("Z"):
-        s = s[:-1] + "+00:00"
-    dt = datetime.fromisoformat(s)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 # Process-wide cache so we don't HEAD the same catalog URL once per proposal.

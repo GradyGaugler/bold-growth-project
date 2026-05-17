@@ -6,14 +6,11 @@ touch the network.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
 from agent import config
 from agent import guardrails as guardrails_mod
 from agent.guardrails import (
     check_proposal_structure,
     reset_url_cache,
-    should_skip_blog,
 )
 
 CATALOG = {
@@ -91,26 +88,6 @@ def test_no_op_change_is_rejected_against_current_cta():
     )
     codes = {f.code for f in result.failures}
     assert "no_op_change" in codes
-
-
-def test_min_age_blocks_recent_cta():
-    today = datetime(2026, 5, 16, tzinfo=timezone.utc)
-    recent = (today - timedelta(days=2)).isoformat()
-    failure = should_skip_blog(
-        current_cta={"deployed_at": recent},
-        today=today,
-    )
-    assert failure and failure.code == "min_age"
-
-
-def test_old_cta_is_not_skipped():
-    today = datetime(2026, 5, 16, tzinfo=timezone.utc)
-    old = (today - timedelta(days=config.MIN_CTA_AGE_DAYS + 1)).isoformat()
-    failure = should_skip_blog(
-        current_cta={"deployed_at": old},
-        today=today,
-    )
-    assert failure is None
 
 
 def test_url_resolve_cache_avoids_repeat_requests(monkeypatch):
