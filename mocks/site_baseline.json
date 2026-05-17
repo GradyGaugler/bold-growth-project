@@ -1,0 +1,52 @@
+{
+  "_comment": "Derived from data.xlsx TOP_PUBLIC_LANDING_PAGES (real Bold organic + GSC numbers). blog_to_sgp_baseline_submit_rate is the baseline submit rate measured when CTAs were absent - blogs at about 0.5% vs SGPs at about 15%.",
+  "blogs": {
+    "https://bold.org/blog/best-physical-therapy-schools/": {
+      "sessions_organic_google": 386,
+      "gsc_clicks": 336,
+      "gsc_impressions": 26834,
+      "baseline_submit_rate": 0.0
+    },
+    "https://bold.org/blog/best-suny-schools-in-new-york/": {
+      "sessions_organic_google": 307,
+      "gsc_clicks": 281,
+      "gsc_impressions": 24892,
+      "baseline_submit_rate": 0.0
+    },
+    "https://bold.org/blog/top-dental-schools-in-the-us/": {
+      "sessions_organic_google": 276,
+      "gsc_clicks": 255,
+      "gsc_impressions": 15012,
+      "baseline_submit_rate": 0.0
+    },
+    "https://bold.org/blog/what-gpa-do-you-need-to-get-a-full-scholarship/": {
+      "sessions_organic_google": 238,
+      "gsc_clicks": 259,
+      "gsc_impressions": 91922,
+      "baseline_submit_rate": 0.0042
+    },
+    "https://bold.org/blog/best-architecture-colleges/": {
+      "sessions_organic_google": 250,
+      "gsc_clicks": 238,
+      "gsc_impressions": 20133,
+      "baseline_submit_rate": 0.0
+    }
+  },
+  "sgp_baseline_submit_rate": {
+    "https://bold.org/scholarships/by-major/nursing-scholarships/": 0.46,
+    "https://bold.org/scholarships/by-demographics/minorities/black-students-scholarships/": 0.71,
+    "https://bold.org/scholarships/by-demographics/first-generation-scholarships/": 0.18,
+    "https://bold.org/scholarships/by-demographics/women/women-stem-scholarships/": 0.09,
+    "https://bold.org/scholarships/by-demographics/mental-health-scholarships/": 0.11,
+    "https://bold.org/scholarships/by-major/art-scholarships/": 0.08,
+    "https://bold.org/scholarships/by-year/graduate-students-scholarships/": 0.10,
+    "https://bold.org/scholarships/by-year/high-school/seniors/": 0.11,
+    "https://bold.org/scholarships/by-type/easy-scholarships/": 0.15,
+    "https://bold.org/scholarships/by-type/no-essay-scholarships/": 0.20,
+    "https://bold.org/scholarships/by-type/essay-scholarships/": 0.13,
+    "https://bold.org/scholarships/by-type/merit-based/": 0.08,
+    "https://bold.org/scholarships/by-type/grants-to-pay-off-student-loans/": 0.08,
+    "https://bold.org/scholarships/the-be-bold-no-essay-scholarship/": 0.81,
+    "https://bold.org/scholarships/women-in-healthcare-scholarship/": 0.20
+  }
+}

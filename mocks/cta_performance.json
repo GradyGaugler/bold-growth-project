@@ -1,0 +1,35 @@
+{
+  "_comment": "Mock perf written by `python -m agent.run --simulate-perf`. Deterministic given the same seed.",
+  "measurements": {
+    "https://bold.org/blog/best-architecture-colleges/": {
+      "blog_to_sgp_sessions": 1,
+      "cta_clicks": 1,
+      "downstream_submits": 0,
+      "measured_through": "2026-05-16"
+    },
+    "https://bold.org/blog/best-physical-therapy-schools/": {
+      "blog_to_sgp_sessions": 2,
+      "cta_clicks": 4,
+      "downstream_submits": 0,
+      "measured_through": "2026-05-16"
+    },
+    "https://bold.org/blog/best-suny-schools-in-new-york/": {
+      "blog_to_sgp_sessions": 1,
+      "cta_clicks": 1,
+      "downstream_submits": 0,
+      "measured_through": "2026-05-16"
+    },
+    "https://bold.org/blog/top-dental-schools-in-the-us/": {
+      "blog_to_sgp_sessions": 3,
+      "cta_clicks": 4,
+      "downstream_submits": 0,
+      "measured_through": "2026-05-16"
+    },
+    "https://bold.org/blog/what-gpa-do-you-need-to-get-a-full-scholarship/": {
+      "blog_to_sgp_sessions": 3,
+      "cta_clicks": 4,
+      "downstream_submits": 0,
+      "measured_through": "2026-05-16"
+    }
+  }
+}

@@ -1,0 +1,228 @@
+"""Hard rules. The LLM cannot waive these.
+
+Organized by where in the pipeline they fire:
+
+- `should_skip_blog` : pre-generator (filter the queue)
+- `check_proposal_structure` : post-generator, pre-reviewer (cheap structural checks)
+- `enforce_run_caps` : post-reviewer, batch-level (diversity + weekly cap)
+- `circuit_breaker_tripped` : run-level (halt if reviewer is rejecting too much)
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any
+from urllib.parse import urlparse
+
+import Levenshtein
+import requests
+
+from agent import config
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GuardrailFailure:
+    code: str
+    detail: str
+
+
+@dataclass
+class StructureCheck:
+    """Result of post-generator structural checks. `failures` empty == pass."""
+
+    failures: list[GuardrailFailure]
+
+    @property
+    def ok(self) -> bool:
+        return not self.failures
+
+
+def should_skip_blog(
+    *,
+    blog_url: str,
+    current_cta: dict[str, Any] | None,
+    frozen_blogs: set[str],
+    today: datetime,
+) -> GuardrailFailure | None:
+    """Pre-generator: filter blogs we won't touch this run. None => proceed."""
+    if blog_url in frozen_blogs:
+        return GuardrailFailure("frozen_blog", "blog is on the frozen list")
+    if current_cta and current_cta.get("deployed_at"):
+        deployed = _parse_iso(current_cta["deployed_at"])
+        age_days = (today - deployed).days
+        if age_days < config.MIN_CTA_AGE_DAYS:
+            return GuardrailFailure(
+                "min_age",
+                f"CTA deployed {age_days}d ago, below MIN_CTA_AGE_DAYS={config.MIN_CTA_AGE_DAYS}",
+            )
+    return None
+
+
+def _parse_iso(s: str) -> datetime:
+    # Tolerate trailing Z (which fromisoformat doesn't accept on some Pythons).
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _contains_banned_phrase(text: str) -> str | None:
+    lowered = text.lower()
+    for phrase in config.BANNED_PHRASES:
+        if phrase.lower() in lowered:
+            return phrase
+    return None
+
+
+# Process-wide cache so we don't HEAD the same catalog URL once per proposal.
+# Cleared by `reset_url_cache()` between test runs.
+_url_resolve_cache: dict[str, bool] = {}
+
+
+def reset_url_cache() -> None:
+    _url_resolve_cache.clear()
+
+
+def _url_resolves(url: str) -> bool:
+    """HEAD request; treat 2xx/3xx as ok. Network errors fail closed.
+
+    Result is memoized for the lifetime of the process - the catalog is
+    fixed within a run, so 5-15 proposals shouldn't issue 5-15 HEADs.
+    """
+    if url in _url_resolve_cache:
+        return _url_resolve_cache[url]
+    try:
+        resp = requests.head(
+            url,
+            allow_redirects=True,
+            timeout=config.SCRAPE_TIMEOUT_SECONDS,
+            headers={"User-Agent": config.SCRAPE_USER_AGENT},
+        )
+        if resp.status_code < 400:
+            _url_resolve_cache[url] = True
+            return True
+        # Some hosts 405 HEAD; fall back to GET.
+        if resp.status_code == 405:
+            resp = requests.get(
+                url,
+                timeout=config.SCRAPE_TIMEOUT_SECONDS,
+                headers={"User-Agent": config.SCRAPE_USER_AGENT},
+            )
+            ok = resp.status_code < 400
+            _url_resolve_cache[url] = ok
+            return ok
+        _url_resolve_cache[url] = False
+        return False
+    except requests.RequestException as exc:
+        logger.warning("HEAD %s failed: %s", url, exc)
+        # Don't cache transient failures - retry next time.
+        return False
+
+
+def check_proposal_structure(
+    *,
+    proposal: dict[str, Any],
+    catalog_urls: set[str],
+    frozen_sgps: set[str],
+    current_cta: dict[str, Any] | None,
+    verify_url_live: bool = True,
+) -> StructureCheck:
+    """Run all post-generator structural checks. Cheap, no LLM calls."""
+    failures: list[GuardrailFailure] = []
+
+    target = proposal.get("target_url", "")
+    headline = proposal.get("headline", "")
+    body = proposal.get("body", "")
+
+    # Catalog membership (defense in depth - schema enum should make this impossible).
+    if target not in catalog_urls:
+        failures.append(
+            GuardrailFailure("off_catalog", f"target_url {target!r} not in catalog")
+        )
+
+    if target in frozen_sgps:
+        failures.append(
+            GuardrailFailure("frozen_sgp", f"target_url {target!r} is on the frozen list")
+        )
+
+    # On-domain.
+    host = urlparse(target).netloc.lower()
+    if host and host != "bold.org" and not host.endswith(".bold.org"):
+        failures.append(
+            GuardrailFailure("off_domain", f"target_url host {host!r} is not bold.org")
+        )
+
+    # Length caps (also schema-enforced; belt and suspenders).
+    if len(headline) > config.HEADLINE_MAX_CHARS:
+        failures.append(GuardrailFailure("headline_too_long", f"{len(headline)} > {config.HEADLINE_MAX_CHARS}"))
+    if len(body) > config.BODY_MAX_CHARS:
+        failures.append(GuardrailFailure("body_too_long", f"{len(body)} > {config.BODY_MAX_CHARS}"))
+
+    # Banned phrases (defense in depth with the prompt).
+    for field, text in (("headline", headline), ("body", body)):
+        hit = _contains_banned_phrase(text)
+        if hit:
+            failures.append(
+                GuardrailFailure("banned_phrase", f"{field} contains banned phrase {hit!r}")
+            )
+
+    # Similarity vs current CTA (don't churn for cosmetic changes).
+    if current_cta and current_cta.get("headline") is not None:
+        cur_blob = (current_cta.get("headline", "") + " | " + current_cta.get("body", "")).strip()
+        new_blob = (headline + " | " + body).strip()
+        if cur_blob and Levenshtein.ratio(cur_blob, new_blob) >= config.SIMILARITY_REJECT_THRESHOLD:
+            failures.append(
+                GuardrailFailure(
+                    "no_op_change",
+                    f"proposed copy >= {config.SIMILARITY_REJECT_THRESHOLD} similar to current",
+                )
+            )
+
+    # Live URL check last - it's the slowest. Skip if anything already failed.
+    if verify_url_live and not failures and not _url_resolves(target):
+        failures.append(GuardrailFailure("dead_link", f"HEAD {target} did not return 2xx/3xx"))
+
+    return StructureCheck(failures=failures)
+
+
+def enforce_run_caps(
+    approved: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Apply same-SGP diversity cap and weekly change cap.
+
+    Returns (kept, deferred). Deferred items get bumped to next week.
+    """
+    kept: list[dict[str, Any]] = []
+    deferred: list[dict[str, Any]] = []
+    per_sgp_count: dict[str, int] = {}
+
+    for item in approved:
+        target = item["proposal"]["target_url"]
+        if per_sgp_count.get(target, 0) >= config.MAX_PER_SGP:
+            item = {**item, "deferred_reason": "diversity_cap"}
+            deferred.append(item)
+            continue
+        if len(kept) >= config.MAX_WEEKLY_CHANGES:
+            item = {**item, "deferred_reason": "weekly_change_cap"}
+            deferred.append(item)
+            continue
+        per_sgp_count[target] = per_sgp_count.get(target, 0) + 1
+        kept.append(item)
+    return kept, deferred
+
+
+def circuit_breaker_tripped(*, rejected: int, total_proposed: int) -> bool:
+    """Halt the run if reviewer rejected at least 50% of proposals.
+
+    Only trips with `MIN_PROPOSALS_FOR_CIRCUIT_BREAKER` or more proposals -
+    otherwise 1 out of 2 (or 1 out of 1) trivially trips the breaker.
+    """
+    if total_proposed < config.MIN_PROPOSALS_FOR_CIRCUIT_BREAKER:
+        return False
+    return rejected / total_proposed >= config.REVIEWER_REJECT_CIRCUIT_BREAKER

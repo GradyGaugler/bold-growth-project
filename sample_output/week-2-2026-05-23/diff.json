@@ -1,0 +1,29 @@
+{
+  "approved": [
+    {
+      "action": "rewrite",
+      "blog_url": "https://bold.org/blog/best-suny-schools-in-new-york/",
+      "new_cta": {
+        "body": "Find 150+ scholarships for high school seniors with May 2026 deadlines. Filter by award amount, essay requirement, and in-state eligibility to narrow options for SUNY applicants.",
+        "headline": "Scholarships for SUNY-bound high school seniors",
+        "target_url": "https://bold.org/scholarships/by-year/high-school/seniors/"
+      },
+      "previous_cta": {
+        "body": "High school seniors: browse 150+ scholarships with May 2026 deadlines. Filter by award amount, essay requirement, and eligibility to find awards that fit your college plans.",
+        "deployed_at": "2026-05-08T22:00:00+00:00",
+        "headline": "High school seniors: scholarships with May 2026 deadlines",
+        "target_url": "https://bold.org/scholarships/by-year/high-school/seniors/",
+        "version": 1
+      }
+    }
+  ],
+  "deferred": [],
+  "human_review": [
+    {
+      "blog_url": "https://bold.org/blog/best-architecture-colleges/",
+      "reason": "revise_unresolved"
+    }
+  ],
+  "retired": [],
+  "week": "2-2026-05-23"
+}
