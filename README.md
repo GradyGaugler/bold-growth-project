@@ -88,8 +88,6 @@ pip install -e ".[dev]"
 cp .env.example .env
 ```
 
-
-
 On Windows, use `py` instead of `python3` and activate with `.venv\Scripts\activate`.
 
 ### Run it
