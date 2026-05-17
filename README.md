@@ -6,7 +6,7 @@ Repo: `https://github.com/<owner>/bold-growth-project` *(swap in real URL on pus
 
 ## Problem and why this one
 
-`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See `[thoughts.md](thoughts.md)` for the other nine candidate opportunities.
+`data.xlsx` (`PAGE_TYPE_FUNNEL`): blogs convert at **0.5%** vs SGPs at **~15%** - a 30x gap on the highest-impressions surface (1.1M GSC impressions/month). Probably the biggest top-of-funnel lever Bold has is routing blog readers to the right SGP with copy that matches the blog's intent. See [`thoughts.md`](thoughts.md) for the other nine candidate opportunities.
 
 ## Why a recurring loop
 
@@ -98,7 +98,9 @@ python3 -m agent.run --simulate-perf           # write deterministic mocked perf
 python3 -m agent.run --week 2-2026-05-23       # second run; loop behaves differently
 ```
 
-### Output - workflow artifacts
+## Workflow artifacts
+
+### Outputs
 
 Each run writes:
 
@@ -109,11 +111,13 @@ Each run writes:
   - Run cost: token counts, $ spent, vs. the $1 cap.
 - `state/cta_state.json` - updated deployed-CTA state + per-blog history (carries into next week's run).
 
+### Prompts
+
 The agent is driven by two prompts a PM owns and edits, plus one config file:
 
-- `[agent/prompts/generator.md](agent/prompts/generator.md)` - tells the generator how to pick a target SGP and write the CTA copy.
-- `[agent/prompts/reviewer.md](agent/prompts/reviewer.md)` - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject.
-- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in `[agent/config.py](agent/config.py)` - intentionally code, since it's policy.
+- [`agent/prompts/generator.md`](agent/prompts/generator.md) - tells the generator how to pick a target SGP and write the CTA copy.
+- [`agent/prompts/reviewer.md`](agent/prompts/reviewer.md) - tells the reviewer how to score relevance + copy quality and when to approve / revise / reject.
+- Threshold tuning (CTR floor, cost cap, similarity threshold, etc.) lives in [`agent/config.py`](agent/config.py) - intentionally code, since it's policy.
 
 ## Guardrails
 
@@ -160,7 +164,7 @@ pytest -q                       # 21 unit tests (guardrails, prioritize, state)
 
 Separate from this build, see:
 
-- `[design/part-2-system-a.md](design/part-2-system-a.md)` - second agentic system design
-- `[design/part-2-system-b.md](design/part-2-system-b.md)` - third agentic system design
-- `[design/part-3-fake-wins.md](design/part-3-fake-wins.md)` - avoiding fake wins
+- [`design/part-2-system-a.md`](design/part-2-system-a.md) - second agentic system design
+- [`design/part-2-system-b.md`](design/part-2-system-b.md) - third agentic system design
+- [`design/part-3-fake-wins.md`](design/part-3-fake-wins.md) - avoiding fake wins
 
