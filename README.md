@@ -108,24 +108,28 @@ The agent is driven by two prompts a PM owns and edits, plus one config file:
 
 Four layers, each catching a different failure mode before anything reaches the PM artifact:
 
-- **Prompt-level**: banned phrases inlined in the generator prompt; `target_url` schema-enum constrained to the real catalog (hallucinated paths are unrepresentable)
-- **Post-generator**: after the generator writes a CTA, the script checks that the link works, stays on Bold.org, fits the copy limits, and is meaningfully different from the current CTA
-- **Post-reviewer**: separate reviewer agent in a fresh context, with an approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact. Brand safety (banned phrases, hype, false promises) is enforced here.
-- **Run-level**: hard `$1.00` cost cap per run
+- **Prompt-level** - banned phrases inlined in the generator prompt; `target_url` schema-enum constrained to the real catalog (hallucinated paths are unrepresentable)
+- **Post-generator** - after the generator writes a CTA, the script checks that the link works, stays on Bold.org, fits the copy limits, and is meaningfully different from the current CTA
+- **Post-reviewer** - separate reviewer agent in a fresh context, with an approval floor (`REVIEWER_APPROVAL_FLOOR=0.7`) before anything reaches the PM artifact. Brand safety (banned phrases, hype, false promises) is enforced here.
+- **Run-level** - hard `$1.00` cost cap per run
 
 ### Analytics / business guardrails
 
 The agent should also prove it is not making the funnel worse. Before expanding rollout, compare edited blogs against the pre-change baseline and a matched / held-out set of similar blogs:
 
-- **Blog CTR regression check**: make sure CTA click-through rate is not getting worse for edited blogs. This is handled in two ways: the weekly agent loop reads performance and can keep / rewrite / retire underperforming CTAs, and a PostHog chart alerts on per-page CTR drops outside the expected band
-- **Downstream quality checks**: also monitor SGP submit rate, verified application rate, and D7 activation so the system does not optimize for clicks that turn into lower-quality applicants. This is also a PostHog chart with alerts.
-- **Regression rule**: if CTA clicks rise while submit / verify / activation falls, or if any destination page shows a meaningful drop vs baseline, auto-retire the CTA or route it back to human review. Basically, measure e2e (not just the immediate action) for this funnel to check against regression.
+- **Blog CTR regression check** - make sure CTA click-through rate is not getting worse for edited blogs. This is handled in two ways: the weekly agent loop reads performance and can keep / rewrite / retire underperforming CTAs, and a PostHog chart alerts on per-page CTR drops outside the expected band
+- **Downstream quality checks** - also monitor SGP submit rate, verified application rate, and D7 activation so the system does not optimize for clicks that turn into lower-quality applicants. This is also a PostHog chart with alerts.
+- **Regression rule** - if CTA clicks rise while submit / verify / activation falls, or if any destination page shows a meaningful drop vs baseline, auto-retire the CTA or route it back to human review. Basically, measure e2e (not just the immediate action) for this funnel to check against regression.
+
+## Riskiest part
+
+Letting an LLM publish reader-facing copy to prod - even with human review. Models can go off-brand or make factual mistakes, and reviewers get complacent fast on a recurring loop (5 plans/week, mostly fine, eyes glaze over). The trust ladder below assumes this and starts with everything human-gated and a small blast radius.
 
 ## Trust ladder
 
-1. **Today**: human approves all of `plan.md` before "deploy" and only 5 blogs.
-2. **Next**: when humans approve 80%, allow it to auto ship itself with humans reading weekly digest. Low confidence score require human review.
-3. **Later**: when 80% do not require changes, expand from 5 blogs gradually towards all ~100 in `TOP_PUBLIC_LANDING_PAGES`
+1. **Today** - human approves all of `plan.md` before "deploy" and only 5 blogs.
+2. **Next** - when humans approve 80%, allow it to auto ship itself with humans reading weekly digest. Low confidence score require human review.
+3. **Later** - when 80% do not require changes, expand from 5 blogs gradually towards all ~100 in `TOP_PUBLIC_LANDING_PAGES`
 
 NOTE: it's also worth mentioning that most reccuring loop systems should start as a one shot before graduating to recurring.
 

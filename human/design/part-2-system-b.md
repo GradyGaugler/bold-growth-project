@@ -1,7 +1,7 @@
 # Part 2b - AI-Discoverability PR Generator
 
 **Shape:** one-shot generator.  
-**One-liner:** one PR fixes `llms.txt`, adds JSON-LD, patches canonicals; an `AGENTS.md` rule + a PR check keep future changes compliant.
+**One-liner:** one PR ships an `llms.txt` for the site and patches the canonicals flagged in `TECH_INDEX_SIGNALS`; an `AGENTS.md` rule + a PR check keep future changes compliant.
 
 ## Problem and why this one
 
@@ -11,34 +11,45 @@
 
 Structural fix. Run once to backfill, including:
 
-- **`AGENTS.md` rule** — new page types must ship with JSON-LD + an `llms.txt` entry.
-- **PR check** - CI agent comments when template/sitemap diffs miss structured data.
+- `AGENTS.md` rule - new page types must ship with an `llms.txt` entry.
+- **PR check** - CI agent comments when template/sitemap diffs miss the entry.
 
-Re-run only when the catalog shape changes (new page type or URL namespace).
+## Trigger
+
+Manual, one-time. Re-run only when the catalog shape changes if needed (new page type or URL namespace), however the new LLM rule and PR check should help avoid that.
 
 ## Data and tools
 
 - **Sitemap + crawler** - enumerate every indexable URL by page type.
-- **`TECH_INDEX_SIGNALS`** — per-URL canonical, redirect, robots, JSON-LD state.
-- **LLM** - generator (drafts `llms.txt` sections, JSON-LD blocks per page type), reviewer (validates schema.org compliance + factual accuracy against the live page).
+- `TECH_INDEX_SIGNALS` - per-URL canonical, redirect, and robots state.
+- **LLM** - generator (drafts `llms.txt` sections grouped by surface + topic), reviewer (validates factual accuracy of each section against the live pages).
 
 ## What it outputs
 
 A single GitHub PR with:
 
 - `public/llms.txt` - structured site map for AI assistants.
-- JSON-LD blocks injected into page templates per type (SGP, scholarship-detail, blog).
 - Canonical / redirect patches for the handful of pages flagged in `TECH_INDEX_SIGNALS`.
-- [`AGENTS.md`](../../AGENTS.md) rule line added to the repo root doc.
-- PR check rule.
+- `[AGENTS.md](../../AGENTS.md)` rule line added to the repo root doc.
+- PR check rule for future changes.
+
+## Decision rules
+
+- **Per URL** - skip if `noindex`, non-200, canonical points elsewhere, or outside approved namespaces (no auth/admin/checkout). Otherwise include in `llms.txt`, grouped by surface.
+- **Per URL canonical/redirect** - only patch the specific URLs `TECH_INDEX_SIGNALS` flags as broken. Leave healthy ones alone.
+- **Abort PR** - if diff exceeds 50 files or the `llms.txt` parse check fails.
 
 ## Guardrails
 
-- **Schema-bound output.** JSON-LD must validate against schema.org before it lands in the PR (deterministic check, not LLM-judged).
-- **No copy edits.** Agent touches structured data and `<head>` only; never user-facing body content (that's Parts 1 and 2a's job).
+- **Parser-bound output** - `llms.txt` must parse cleanly against the llmstxt.org spec and every URL must return 200 before it lands in the PR (deterministic check, not LLM-judged).
+- **URL hygiene** - Every URL must be canonical (not a redirect, not `noindex`) and outside blocked namespaces (auth, admin, staging) - keeps AI crawlers off the wrong pages.
+- **No copy edits** - Agent touches `llms.txt`, canonicals, and redirects only; never user-facing body content (that's Parts 1 and 2a's job).
 
 ## How you'd know it's working
 
-- **Leading:** `llms.txt` returns 200
-- **Lagging:** AI-assistant citations of [bold.org](http://bold.org) trend up over 60 days
+- **Leading** - `llms.txt` returns 200
+- **Lagging** - AI-assistant citations of [bold.org](http://bold.org) trend up over 60 days
 
+## Graduation
+
+The backfill PR is always human-merged - this is a dev tool, not an autonomous system. The two recurring pieces (LLM rule and PR check) start as "file a PR / leave a comment" and can graduate to auto-merge once the team believes it's reliable and beneficial.
